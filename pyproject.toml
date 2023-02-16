@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "salesp4tagonia-ds"
+version = "0.1.0"
+description = "Sales Patagonia DS"
+authors = ["eiurrutia <eiurrutia@uc.cl>"]
+readme = "README.md"
+packages = [{include = "salesp4tagonia_ds"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+panda = "^0.3.1"
+numpy = "^1.24.2"
+seaborn = "^0.12.2"
+matplotlib = "^3.6.3"
+jupyter = "^1.0.0"
+scikit-learn = "^1.2.1"
+xgboost = "^1.7.3"
+pandasql = "^0.7.3"
+sqlalchemy = "1.4.46"
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "^2.0.1"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.2.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
