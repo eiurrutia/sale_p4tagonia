@@ -255,3 +255,22 @@ def test_month_information():
 
     df = add_month_information(df)
     assert df['month'].to_list() == [2, 5, 7, 12]
+
+
+def test_year_information():
+    data = {'sku': ["1", "1", "1", "2"],
+            'quantity': [5, 6, 7, 8],
+            'date': [
+                '08-02-2018', '26-05-2023',
+                '07-07-2022', '09-12-2019'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_year_information(df)
+    assert df['year'].to_list() == [2018, 2023, 2022, 2019]
