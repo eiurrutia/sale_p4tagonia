@@ -180,3 +180,28 @@ def add_month_information(df):
     result['date'] = pd.to_datetime(result['date'])
     result['month'] = result['month'].astype(int)
     return result
+
+
+def add_year_information(df):
+    """
+    Adds a new column to the input DataFrame with a column that explain which
+    month of the week correspond the date: 2018, 2019, ..., 2023
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format month in number
+    """
+    query = f'''
+        SELECT date, sku, warehouse, quantity,
+            strftime('%Y', date) AS year
+        FROM df
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['year'] = result['year'].astype(int)
+    return result
