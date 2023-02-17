@@ -110,7 +110,7 @@ def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
         --------
     Returns:
         DataFrame: The input DataFrame with the new column added with the
-            format sku_warehouse_last_{days}days_sales
+            name 'sku_warehouse_historic_sales_same_day_of_the_week'
     """
     query = f'''
         SELECT a.date, a.sku, a.warehouse, a.quantity,
@@ -128,6 +128,39 @@ def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_historic_sales_same_day_of_the_week'] = \
         result['sku_warehouse_historic_sales_same_day_of_the_week'].astype(int)
+    return result
+
+
+def add_sku_warehouse_historic_sales_same_month(df):
+    """
+    Adds a new column to the input DataFrame with the quantity of SKUs sold
+    in the same month of the year in the same warehouse.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'sku_warehouse_historic_sales_same_month'
+    """
+    query = f'''
+        SELECT a.date, a.sku, a.warehouse, a.quantity,
+           COALESCE(SUM(b.quantity), 0)
+            AS sku_warehouse_historic_sales_same_month
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND a.warehouse = b.warehouse
+            AND strftime('%m', b.date) = strftime('%m', a.date)
+            AND strftime('%Y', b.date) < strftime('%Y', a.date)
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['sku_warehouse_historic_sales_same_month'] = \
+        result['sku_warehouse_historic_sales_same_month'].astype(int)
     return result
 
 
