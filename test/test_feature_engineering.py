@@ -314,6 +314,56 @@ def test_year_information():
     assert df['year'].to_list() == [2018, 2023, 2022, 2019]
 
 
+def test_add_sku_warehouse_cumulative_sales_in_the_week():
+    data = {'sku': ["1", "1", "1", "1", "1", "1"],
+            'quantity': [100, 200, 80, 50, 70, 120],
+            'date': [
+                '05-02-2023', '06-02-2023',
+                '12-02-2023', '14-02-2023',
+                '08-02-2023', '09-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'LASCONDES',
+                'MALLSPORT', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_sku_warehouse_cumulative_sales_in_the_week(df)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-06')
+        ]['sku_warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-12')
+        ]['sku_warehouse_cumulative_sales_in_the_week'].values[0] == 200
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-14')
+        ]['sku_warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-08')
+        ]['sku_warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-09')
+        ]['sku_warehouse_cumulative_sales_in_the_week'].values[0] == 70
+
+
 def test_add_sku_warehouse_cumulative_sales_in_the_month():
     data = {'sku': ["1", "1", "1", "1", "2", "2"],
             'quantity': [100, 200, 80, 50, 70, 120],
