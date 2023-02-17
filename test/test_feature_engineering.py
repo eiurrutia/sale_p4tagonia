@@ -312,3 +312,54 @@ def test_year_information():
 
     df = add_year_information(df)
     assert df['year'].to_list() == [2018, 2023, 2022, 2019]
+
+
+def test_add_sku_warehouse_cumulative_sales_in_the_month():
+    data = {'sku': ["1", "1", "1", "1", "2", "2"],
+            'quantity': [100, 200, 80, 50, 70, 120],
+            'date': [
+                '08-02-2018', '12-02-2023',
+                '27-02-2023', '28-02-2023',
+                '09-11-2022', '09-12-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'LASCONDES',
+                'MALLSPORT', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_sku_warehouse_cumulative_sales_in_the_month(df)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-12')
+        ]['sku_warehouse_cumulative_sales_in_the_month'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-27')
+        ]['sku_warehouse_cumulative_sales_in_the_month'].values[0] == 200
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-28')
+        ]['sku_warehouse_cumulative_sales_in_the_month'].values[0] == 280
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2022-11-09')
+        ]['sku_warehouse_cumulative_sales_in_the_month'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-12-09')
+        ]['sku_warehouse_cumulative_sales_in_the_month'].values[0] == 0
+   
