@@ -50,10 +50,6 @@ def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
             format sku_warehouse_last_{days}days_sales
     """
     query = f'''
-        SELECT date, strftime('%w', date) AS day_of_week
-        FROM df
-    '''
-    query = f'''
         SELECT a.date, a.sku, a.warehouse, a.quantity,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_historic_sales_same_day_of_the_week
