@@ -4,7 +4,7 @@ from sales import sns, norm, plt, stats, np, pd, ps, data_holder
 def add_sku_warehouse_sales_last_xdays_sales(df, days):
     """
     Adds a new column to the input DataFrame with the quantity of SKUs sold
-    in the last week in the same warehouse.
+    in the last 'days' in the same warehouse.
 
     Parameters:
         --------
@@ -35,10 +35,73 @@ def add_sku_warehouse_sales_last_xdays_sales(df, days):
     return result
 
 
+def add_sku_historic_sales(df):
+    """
+    Adds a new column to the input DataFrame with the quantity of SKUs sold
+    in historically in the company.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format sku_historic_sales
+    """
+    query = f'''
+        SELECT a.date, a.sku, a.warehouse, a.quantity,
+           COALESCE(SUM(b.quantity), 0)
+            AS sku_historic_sales
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND b.date < a.date
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['sku_historic_sales'] = \
+        result['sku_historic_sales'].astype(int)
+    return result
+
+
+def add_sku_warehouse_historic_sales(df):
+    """
+    Adds a new column to the input DataFrame with the quantity of SKUs sold
+    in historically in the same warehouse.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format sku_warehouse_historic_sales
+    """
+    query = f'''
+        SELECT a.date, a.sku, a.warehouse, a.quantity,
+           COALESCE(SUM(b.quantity), 0)
+            AS sku_warehouse_historic_sales
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND a.warehouse = b.warehouse
+            AND b.date < a.date
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['sku_warehouse_historic_sales'] = \
+        result['sku_warehouse_historic_sales'].astype(int)
+    return result
+
+
 def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
     """
     Adds a new column to the input DataFrame with the quantity of SKUs sold
-    in the last week in the same warehouse.
+    in the same day of the week in the same warehouse.
 
     Parameters:
         --------
@@ -65,4 +128,55 @@ def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_historic_sales_same_day_of_the_week'] = \
         result['sku_warehouse_historic_sales_same_day_of_the_week'].astype(int)
+    return result
+
+
+def add_weekday_information(df):
+    """
+    Adds a new column to the input DataFrame with a column that explain which
+    day of the week correspon the date:
+        0 --> Sunday, 1 --> Monday, 6 --> Saturday
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format weekday
+    """
+    query = f'''
+        SELECT date, sku, warehouse, quantity,
+            strftime('%w', date) AS weekday
+        FROM df
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['weekday'] = result['weekday'].astype(int)
+    return result
+
+
+def add_month_information(df):
+    """
+    Adds a new column to the input DataFrame with a column that explain which
+    month of the week correspond the date:
+        1 --> Jaunary, 3 --> March, 9 --> September, 12 --> December
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format month in number
+    """
+    query = f'''
+        SELECT date, sku, warehouse, quantity,
+            strftime('%m', date) AS month
+        FROM df
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['month'] = result['month'].astype(int)
     return result
