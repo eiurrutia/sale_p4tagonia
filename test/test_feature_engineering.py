@@ -53,6 +53,107 @@ def test_add_sku_warehouse_sales_last_xdays_sales():
         ][f'sku_warehouse_last_{days}days_sales'].values[0] == 6
 
 
+def test_add_sku_historic_sales():
+    data = {'sku': [
+                "1", "1", "2", "2", "2", "2",
+                "2", "4", "4", "4", "4", "4"
+            ],
+            'quantity': [5, 6, 7, 8, 4, 3,
+                         5, 6, 3, 8, 10, 11],
+            'date': [
+                '08-02-2023', '15-03-2023',
+                '09-02-2023', '23-02-2023',
+                '02-05-2023', '09-08-2023',
+                '16-02-2023', '03-02-2023',
+                '10-02-2023', '17-02-2023',
+                '24-02-2023', '03-03-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'LASCONDES',
+                'MALLSPORT', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_sku_historic_sales(df)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-03-15')
+        ][f'sku_historic_sales'].values[0] == 5
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-08-09')
+        ][f'sku_historic_sales'].values[0] == 24
+    assert \
+        df[
+            (df['sku'] == '4') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-03-03')
+        ][f'sku_historic_sales'].values[0] == 27
+
+
+def test_add_sku_warehouse_historic_sales():
+    data = {'sku': [
+                "1", "1", "2", "2", "2", "2",
+                "2", "4", "4", "4", "4", "4"
+            ],
+            'quantity': [5, 6, 7, 8, 4, 3, 5, 6, 3, 8, 10, 11],
+            'date': [
+                '08-02-2023', '15-03-2023',
+                '09-02-2023', '23-02-2023',
+                '02-05-2023', '09-08-2023',
+                '16-02-2023', '03-02-2023',
+                '10-02-2023', '17-02-2023',
+                '24-02-2023', '03-03-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'LASCONDES',
+                'MALLSPORT', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_sku_warehouse_historic_sales(df)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-03-15')
+        ][f'sku_warehouse_historic_sales'].values[0] == 5
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-23')
+        ][f'sku_warehouse_historic_sales'].values[0] == 7
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-08-09')
+        ][f'sku_warehouse_historic_sales'].values[0] == 9
+    assert \
+        df[
+            (df['sku'] == '4') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-03-03')
+        ][f'sku_warehouse_historic_sales'].values[0] == 27
+
+
 def test_add_sku_warehouse_historic_sales_same_day_of_the_week():
     data = {'sku': [
                 "1", "1", "2", "2", "2", "2",
@@ -116,3 +217,41 @@ def test_add_sku_warehouse_historic_sales_same_day_of_the_week():
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-03-03')
         ][f'sku_warehouse_historic_sales_same_day_of_the_week'].values[0] == 27
+
+
+def test_add_weekday_information():
+    data = {'sku': ["1", "1", "1", "2"],
+            'quantity': [5, 6, 7, 8],
+            'date': [
+                '08-02-2023', '26-02-2023',
+                '07-02-2023', '09-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_weekday_information(df)
+    assert df['weekday'].to_list() == [3, 0, 2, 4]
+
+
+def test_month_information():
+    data = {'sku': ["1", "1", "1", "2"],
+            'quantity': [5, 6, 7, 8],
+            'date': [
+                '08-02-2023', '26-05-2023',
+                '07-07-2023', '09-12-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_month_information(df)
+    assert df['month'].to_list() == [2, 5, 7, 12]
