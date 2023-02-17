@@ -271,3 +271,36 @@ def add_sku_warehouse_cumulative_sales_in_the_month(df):
     result['sku_warehouse_cumulative_sales_in_the_month'] = \
         result['sku_warehouse_cumulative_sales_in_the_month'].astype(int)
     return result
+
+
+def add_sku_warehouse_cumulative_sales_in_the_year(df):
+    """
+    Adds a new column to the input DataFrame with the cumulative year
+    sales for the sku in the warehouse.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'sku_warehouse_cumulative_sales_in_the_year'
+    """
+    query = f'''
+        SELECT a.date, a.sku, a.warehouse, a.quantity,
+           COALESCE(SUM(b.quantity), 0)
+            AS sku_warehouse_cumulative_sales_in_the_year
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND a.warehouse = b.warehouse
+            AND strftime('%Y', b.date) = strftime('%Y', a.date)
+            AND b.date < a.date
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['sku_warehouse_cumulative_sales_in_the_year'] = \
+        result['sku_warehouse_cumulative_sales_in_the_year'].astype(int)
+    return result
