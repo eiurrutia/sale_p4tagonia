@@ -45,7 +45,6 @@ def test_group_data():
     })
     data_holder.set_data(df)
     data_holder.group_data(['sku'], {'quantity1': 'max', 'quantity2': 'sum'})
-    print(data_holder.get_data())
     assert data_holder.get_data()['sku'].tolist() == ['1', '2']
     assert data_holder.get_data()['quantity1'].tolist() == [8, 2]
     assert data_holder.get_data()['quantity2'].tolist() == [26, 2]
@@ -85,3 +84,21 @@ def test_rename_columns():
     })
     assert data_holder.get_data().columns.tolist() == [
         'sku', 'quantity', 'date']
+
+
+def test_set_type_columns():
+    df = pd.DataFrame({
+        'sku': ["1", "1", "1", "1", "2"],
+        'quantity': [5, 5, 5, 8, 2],
+        'date': [
+            '06-02-2023', '06-02-2023',
+            '06-02-2023', '08-02-2023',
+            '06-02-2023']
+    })
+    data_holder.set_data(df)
+    data_holder.set_type_columns({
+        'date': 'datetime64',
+        'quantity': 'float',
+    })
+    assert data_holder.get_data()['date'].dtype == 'datetime64[ns]'
+    assert data_holder.get_data()['quantity'].dtype == 'float64'
