@@ -37,7 +37,7 @@ def add_sku_warehouse_last_xdays_sales(df, days):
 
 def add_sku_warehouse_last_xdays_mean_sales(df, days):
     """
-    Adds a new column to the input DataFrame with the mean of the 
+    Adds a new column to the input DataFrame with the mean of the
     quantity of SKUs sold in the last 'days' in the same warehouse.
 
     Parameters:
@@ -275,6 +275,40 @@ def add_year_information(df):
     return result
 
 
+def add_offer_day_information(df_sales, df_offer_campaigns):
+    """
+    Adds a new column to the Sales DataFrame with a column that show if
+    the row data correspond to a sale in offer campaigns period.
+    1 --> Sale during offer compaign, 0 --> Sale in normal days
+    Parameters:
+        --------
+        df_sales: DataFrame
+            The input DataFrame with the sales data.
+        df_offer_campaigns: DataFrame
+            The input DataFrame with the offer campaigns data. This dataframe
+            follow the schema start_date, end_date, campaign_name
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            column is_offer_day
+    """
+    query = f'''
+        SELECT df_s.*,
+            CASE WHEN df_oc.start_date <= df_s.date
+                    AND df_s.date <= df_oc.end_date
+                THEN 1
+                ELSE 0
+            END AS is_offer_day
+        FROM df_sales df_s
+        LEFT JOIN df_offer_campaigns df_oc
+            ON df_s.date BETWEEN dF_oc.start_date AND df_oc.end_date
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['is_offer_day'] = result['is_offer_day'].astype(int)
+    return result
+
+
 def add_sku_cumulative_sales_in_the_week(df):
     """
     Adds a new column to the input DataFrame with the cumulative week
@@ -468,3 +502,5 @@ def add_sku_warehouse_cumulative_sales_in_the_year(df):
     result['sku_warehouse_cumulative_sales_in_the_year'] = \
         result['sku_warehouse_cumulative_sales_in_the_year'].astype(int)
     return result
+
+
