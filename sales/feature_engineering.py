@@ -18,7 +18,7 @@ def add_sku_warehouse_last_xdays_sales(df, days):
             format sku_warehouse_last_{days}days_sales
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0) AS sku_warehouse_last_{days}days_sales
         FROM df a
         LEFT JOIN df b
@@ -52,7 +52,7 @@ def add_sku_warehouse_last_xdays_mean_sales(df, days):
             format sku_warehouse_last_{days}days_mean_sales
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(ROUND(AVG(b.quantity), 2), 0)
             AS sku_warehouse_last_{days}days_mean_sales
         FROM df a
@@ -85,7 +85,7 @@ def add_sku_historic_sales(df):
             format sku_historic_sales
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_historic_sales
         FROM df a
@@ -116,7 +116,7 @@ def add_sku_warehouse_historic_sales(df):
             format sku_warehouse_historic_sales
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_historic_sales
         FROM df a
@@ -148,7 +148,7 @@ def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
             name 'sku_warehouse_historic_sales_same_day_of_the_week'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_historic_sales_same_day_of_the_week
         FROM df a
@@ -181,7 +181,7 @@ def add_sku_warehouse_historic_sales_same_month(df):
             name 'sku_warehouse_historic_sales_same_month'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_historic_sales_same_month
         FROM df a
@@ -214,7 +214,7 @@ def add_weekday_information(df):
             format weekday
     """
     query = f'''
-        SELECT date, sku, warehouse, quantity,
+        SELECT *,
             strftime('%w', date) AS weekday
         FROM df
     '''
@@ -240,7 +240,7 @@ def add_month_information(df):
             format month in number
     """
     query = f'''
-        SELECT date, sku, warehouse, quantity,
+        SELECT *,
             strftime('%m', date) AS month
         FROM df
     '''
@@ -265,7 +265,7 @@ def add_year_information(df):
             format month in number
     """
     query = f'''
-        SELECT date, sku, warehouse, quantity,
+        SELECT *,
             strftime('%Y', date) AS year
         FROM df
     '''
@@ -324,7 +324,7 @@ def add_sku_cumulative_sales_in_the_week(df):
             name 'sku_cumulative_sales_in_the_week'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_cumulative_sales_in_the_week
         FROM df a
@@ -356,7 +356,7 @@ def add_sku_cumulative_sales_in_the_month(df):
             name 'sku_cumulative_sales_in_the_month'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_cumulative_sales_in_the_month
         FROM df a
@@ -388,7 +388,7 @@ def add_sku_cumulative_sales_in_the_year(df):
             name 'sku_cumulative_sales_in_the_year'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_cumulative_sales_in_the_year
         FROM df a
@@ -420,7 +420,7 @@ def add_sku_warehouse_cumulative_sales_in_the_week(df):
             name 'sku_warehouse_cumulative_sales_in_the_week'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_cumulative_sales_in_the_week
         FROM df a
@@ -453,7 +453,7 @@ def add_sku_warehouse_cumulative_sales_in_the_month(df):
             name 'sku_warehouse_cumulative_sales_in_the_month'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_cumulative_sales_in_the_month
         FROM df a
@@ -486,7 +486,7 @@ def add_sku_warehouse_cumulative_sales_in_the_year(df):
             name 'sku_warehouse_cumulative_sales_in_the_year'
     """
     query = f'''
-        SELECT a.date, a.sku, a.warehouse, a.quantity,
+        SELECT a.*,
            COALESCE(SUM(b.quantity), 0)
             AS sku_warehouse_cumulative_sales_in_the_year
         FROM df a
@@ -502,5 +502,3 @@ def add_sku_warehouse_cumulative_sales_in_the_year(df):
     result['sku_warehouse_cumulative_sales_in_the_year'] = \
         result['sku_warehouse_cumulative_sales_in_the_year'].astype(int)
     return result
-
-
