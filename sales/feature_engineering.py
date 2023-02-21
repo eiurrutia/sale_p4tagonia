@@ -199,6 +199,32 @@ def add_sku_warehouse_historic_sales_same_month(df):
     return result
 
 
+def add_unit_price_information(df):
+    """
+    Adds a new column to the input DataFrame with the unit price of the SKU for
+    in the same month of the year in the same warehouse.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'unit_price'
+    """
+    query = f'''
+        SELECT df.*,
+           COALESCE(ROUND(df.sale_amount/df.quantity, 0), 0)
+            AS unit_price
+        FROM df
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['unit_price'] = result['unit_price'].astype(int)
+    return result
+
+
 def add_weekday_information(df):
     """
     Adds a new column to the input DataFrame with a column that explain which
