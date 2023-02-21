@@ -367,6 +367,57 @@ def test_year_information():
     assert df['year'].to_list() == [2018, 2023, 2022, 2019]
 
 
+def test_add_offer_day_information():
+    data_sales = {
+                'sku': ["1", "1", "1", "1", "1", "1"],
+                'quantity': [100, 200, 80, 50, 70, 120],
+                'date': [
+                    '05-02-2023', '06-02-2023',
+                    '12-02-2023', '14-02-2023',
+                    '08-02-2023', '09-02-2023'
+                ],
+                'warehouse': [
+                    'LASCONDES', 'LASCONDES',
+                    'LADEHESA', 'LADEHESA',
+                    'MALLSPORT', 'MALLSPORT'
+                ]}
+    data_campaigns = {
+            'start_date': [
+                '04-02-2023', '13-02-2023',
+                '09-02-2023'
+            ],
+            'end_date': [
+                '07-02-2023', '15-02-2023',
+                '10-02-2023'
+            ],
+            'campaign_name': [
+                'SALE1', 'SALE2',
+                'SALE3'
+            ]}
+    df_sales = pd.DataFrame(data_sales)
+    df_campaigns = pd.DataFrame(data_campaigns)
+    # Convert the date column to datetime type
+    df_sales['date'] = pd.to_datetime(df_sales['date'], format='%d-%m-%Y')
+    df_campaigns['start_date'] = \
+        pd.to_datetime(df_campaigns['start_date'], format='%d-%m-%Y')
+    df_campaigns['end_date'] = \
+        pd.to_datetime(df_campaigns['end_date'], format='%d-%m-%Y')
+
+    df = add_offer_day_information(df_sales, df_campaigns)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-05')
+        ]['is_offer_day'].values[0] == 1
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LADEHESA') &
+            (df['date'] == '2023-02-12')
+        ]['is_offer_day'].values[0] == 0
+
+
 def test_add_sku_cumulative_sales_in_the_week():
     data = {'sku': ["1", "1", "1", "1", "1", "1"],
             'quantity': [100, 200, 80, 50, 70, 120],
