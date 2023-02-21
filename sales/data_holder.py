@@ -64,7 +64,19 @@ class DataHolder:
         Parameters:
             --------
             rename_dict: dictionary
-                Disctionary with pairs old_name: new_name
+                Dictionary with pairs old_name: new_name
         """
         df = self.get_data()
         return self.set_data(df.rename(columns=rename_dict))
+
+    def set_type_columns(self, type_dict):
+        """Rename data columns
+        Parameters:
+            --------
+            type_dict: dictionary
+                Dictionary with pairs col: data type
+        """
+        df = self.get_data()
+        for col, as_type in type_dict.items():
+            df[col] = df[col].astype(as_type)
+        return self.set_data(df)
