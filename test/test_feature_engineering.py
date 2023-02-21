@@ -310,6 +310,26 @@ def test_add_sku_warehouse_historic_sales_same_month():
         ]['sku_warehouse_historic_sales_same_month'].values[0] == 120
 
 
+def test_add_unit_price_information():
+    data = {'sku': ["1", "1", "1", "2"],
+            'quantity': [5, 6, 1, 8],
+            'sale_amount': [200, 1800, 7890, 85035],
+            'date': [
+                '08-02-2023', '26-02-2023',
+                '07-02-2023', '09-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_unit_price_information(df)
+    assert df['unit_price'].to_list() == [40, 300, 7890, 10629]
+
+
 def test_add_weekday_information():
     data = {'sku': ["1", "1", "1", "2"],
             'quantity': [5, 6, 7, 8],
