@@ -335,6 +335,35 @@ def add_offer_day_information(df_sales, df_offer_campaigns):
     return result
 
 
+def add_warehouse_is_metropolitan_zone(df_sales, df_warehouses):
+    """
+    Adds a new column to the Sales DataFrame with a column that show if
+    the row data correspond to a sale in a warehouse located in RM.
+    1 --> Sale in metropolitan zone, 0 --> Sale not in metropolitan zone
+    Parameters:
+        --------
+        df_sales: DataFrame
+            The input DataFrame with the sales data.
+        df_warehouses: DataFrame
+            The input DataFrame with the warehouses data. This dataframe
+            follow the schema warehouse, is_metropolitan_zone
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            column is_metropolitan_zone
+    """
+    query = f'''
+        SELECT df_s.*, df_w.is_metropolitan_zone
+        FROM df_sales df_s
+        LEFT JOIN df_warehouses df_w
+            ON df_s.warehouse = df_w.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['is_metropolitan_zone'] = result['is_metropolitan_zone'].astype(int)
+    return result
+
+
 def add_sku_cumulative_sales_in_the_week(df):
     """
     Adds a new column to the input DataFrame with the cumulative week
