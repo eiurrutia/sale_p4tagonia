@@ -438,7 +438,7 @@ def test_add_offer_day_information():
         ]['is_offer_day'].values[0] == 0
 
 
-def test_add_offer_day_information():
+def test_add_warehouse_is_metropolitan_zone():
     data_sales = {
                 'sku': ["1", "1", "1", "1", "1", "1"],
                 'quantity': [100, 200, 80, 50, 70, 120],
