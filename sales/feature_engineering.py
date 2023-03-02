@@ -353,7 +353,8 @@ def add_warehouse_is_metropolitan_zone(df_sales, df_warehouses):
             column is_metropolitan_zone
     """
     query = f'''
-        SELECT df_s.*, df_w.is_metropolitan_zone
+        SELECT df_s.*,
+            COALESCE(df_w.is_metropolitan_zone, 0) AS is_metropolitan_zone
         FROM df_sales df_s
         LEFT JOIN df_warehouses df_w
             ON df_s.warehouse = df_w.warehouse
@@ -382,7 +383,7 @@ def add_warehouse_is_inside_mall(df_sales, df_warehouses):
             column is_inside_mall
     """
     query = f'''
-        SELECT df_s.*, df_w.is_inside_mall
+        SELECT df_s.*, COALESCE(df_w.is_inside_mall, 0) AS is_inside_mall
         FROM df_sales df_s
         LEFT JOIN df_warehouses df_w
             ON df_s.warehouse = df_w.warehouse
