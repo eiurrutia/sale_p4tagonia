@@ -101,6 +101,70 @@ def add_sku_historic_sales(df):
     return result
 
 
+def add_sku_historic_sales_same_day_of_the_week(df):
+    """
+    Adds a new column to the input DataFrame with the quantity of SKUs sold
+    in the same day of the week historically in the company.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'sku_historic_sales_same_day_of_the_week'
+    """
+    query = f'''
+        SELECT a.*,
+           COALESCE(SUM(b.quantity), 0)
+            AS sku_historic_sales_same_day_of_the_week
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND strftime('%w', b.date) = strftime('%w', a.date)
+            AND b.date < a.date
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['sku_historic_sales_same_day_of_the_week'] = \
+        result['sku_historic_sales_same_day_of_the_week'].astype(int)
+    return result
+
+
+def add_sku_historic_sales_same_month(df):
+    """
+    Adds a new column to the input DataFrame with the quantity of SKUs sold
+    in the same month of the year historically in the company.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'sku_historic_sales_same_month'
+    """
+    query = f'''
+        SELECT a.*,
+           COALESCE(SUM(b.quantity), 0)
+            AS sku_historic_sales_same_month
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND strftime('%m', b.date) = strftime('%m', a.date)
+            AND strftime('%Y', b.date) < strftime('%Y', a.date)
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['sku_historic_sales_same_month'] = \
+        result['sku_historic_sales_same_month'].astype(int)
+    return result
+
+
 def add_sku_warehouse_historic_sales(df):
     """
     Adds a new column to the input DataFrame with the quantity of SKUs sold
