@@ -509,7 +509,7 @@ def test_add_warehouse_is_inside_mall():
                 'warehouse': [
                     'COYHAIQUE', 'LADEHESA',
                     'MALLSPORT', 'CONCEPCION',
-                    'LASCONDES', 'PTOVARAS'
+                    'OTRAUBICACION', 'PTOVARAS'
                 ],
                 'is_inside_mall': [0, 1, 1, 1, 1, 0]
                 }
@@ -523,7 +523,7 @@ def test_add_warehouse_is_inside_mall():
             (df['sku'] == '1') &
             (df['warehouse'] == 'LASCONDES') &
             (df['date'] == '2023-02-05')
-        ]['is_inside_mall'].values[0] == 1
+        ]['is_inside_mall'].values[0] == 0
     assert \
         df[
             (df['sku'] == '1') &
