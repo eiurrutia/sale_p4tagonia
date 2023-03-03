@@ -24,7 +24,7 @@ def add_sku_warehouse_last_xdays_sales(df, days):
         LEFT JOIN df b
             ON a.sku = b.sku
             AND a.warehouse = b.warehouse
-            AND b.date >= DATE(a.date, '-{7} day')
+            AND b.date >= DATE(a.date, '-{days} day')
             AND b.date < a.date
         GROUP BY a.date, a.sku, a.warehouse
     '''
