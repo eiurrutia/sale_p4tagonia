@@ -53,6 +53,55 @@ def test_add_sku_warehouse_last_xdays_sales():
         ][f'sku_warehouse_last_{days}days_sales'].values[0] == 6
 
 
+def test_add_y_sku_warehouse_next_xdays_sales():
+    data = {'sku': ["1", "1", "1", "2", "2", "4", "4", "2", "2", "2"],
+            'quantity': [5, 6, 7, 8, 4, 3, 5, 6, 3, 5],
+            'date': [
+                '08-02-2023', '06-02-2023',
+                '07-02-2023', '08-02-2023',
+                '19-02-2023', '08-02-2023',
+                '07-02-2023', '02-02-2023',
+                '09-02-2023', '10-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT',
+                'MALLSPORT', 'LADEHESA',
+                'COSTANERA', 'MALLSPORT',
+                'MALLSPORT', 'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    days = 7
+
+    df = add_y_sku_warehouse_next_xdays_sales(df, days)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-06')
+        ][f'y_sku_warehouse_next_{days}days_sales'].values[0] == 12
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-08')
+        ][f'y_sku_warehouse_next_{days}days_sales'].values[0] == 8
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-02')
+        ][f'y_sku_warehouse_next_{days}days_sales'].values[0] == 11
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-19')
+        ][f'y_sku_warehouse_next_{days}days_sales'].values[0] == 0
+
+
 def test_add_sku_warehouse_last_xdays_mean_sales():
     data = {'sku': ["1", "1", "1", "2", "2", "2", "2", "2"],
             'quantity': [5, 6, 7, 8, 4, 7, 2, 5],
