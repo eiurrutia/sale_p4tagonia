@@ -35,6 +35,41 @@ def add_sku_warehouse_last_xdays_sales(df, days):
     return result
 
 
+def add_y_sku_warehouse_next_xdays_sales(df, days):
+    """
+    Adds a new column to the input DataFrame with the quantity of SKUs to sale
+    in the next 'days' in the same warehouse.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+        days: Int
+            Number of the days that you want to look ahead.
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format y_sku_warehouse_next_{days}days_sales
+    """
+    query = f'''
+        SELECT a.*,
+           COALESCE(SUM(b.quantity), 0)
+            AS y_sku_warehouse_next_{days}days_sales
+        FROM df a
+        LEFT JOIN df b
+            ON a.sku = b.sku
+            AND a.warehouse = b.warehouse
+            AND b.date < DATE(a.date, '{days + 1} day')
+            AND b.date > a.date
+        GROUP BY a.date, a.sku, a.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result[f'y_sku_warehouse_next_{days}days_sales'] = \
+        result[f'y_sku_warehouse_next_{days}days_sales'].astype(int)
+    return result
+
+
 def add_sku_warehouse_last_xdays_mean_sales(df, days):
     """
     Adds a new column to the input DataFrame with the mean of the
