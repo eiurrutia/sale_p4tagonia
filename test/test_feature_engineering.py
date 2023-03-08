@@ -158,17 +158,18 @@ def test_add_sku_warehouse_last_xdays_mean_sales():
 def test_add_sku_historic_sales():
     data = {'sku': [
                 "1", "1", "2", "2", "2", "2",
-                "2", "4", "4", "4", "4", "4"
+                "2", "4", "4", "4", "4", "4", "2"
             ],
             'quantity': [5, 6, 7, 8, 4, 3,
-                         5, 6, 3, 8, 10, 11],
+                         5, 6, 3, 8, 10, 11, 5],
             'date': [
                 '08-02-2023', '15-03-2023',
                 '09-02-2023', '23-02-2023',
                 '02-05-2023', '09-08-2023',
                 '16-02-2023', '03-02-2023',
                 '10-02-2023', '17-02-2023',
-                '24-02-2023', '03-03-2023'
+                '24-02-2023', '03-03-2023',
+                '23-02-2023'
             ],
             'warehouse': [
                 'LASCONDES', 'LASCONDES',
@@ -176,7 +177,8 @@ def test_add_sku_historic_sales():
                 'MALLSPORT', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT',
-                'MALLSPORT', 'MALLSPORT'
+                'MALLSPORT', 'MALLSPORT',
+                'COSTANERA'
             ]}
     df = pd.DataFrame(data)
     # Convert the date column to datetime type
@@ -192,9 +194,21 @@ def test_add_sku_historic_sales():
     assert \
         df[
             (df['sku'] == '2') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-23')
+        ][f'sku_historic_sales'].values[0] == 12
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'COSTANERA') &
+            (df['date'] == '2023-02-23')
+        ][f'sku_historic_sales'].values[0] == 12
+    assert \
+        df[
+            (df['sku'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-08-09')
-        ][f'sku_historic_sales'].values[0] == 24
+        ][f'sku_historic_sales'].values[0] == 29
     assert \
         df[
             (df['sku'] == '4') &
@@ -845,6 +859,12 @@ def test_add_sku_cumulative_sales_in_the_year():
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2018-12-09')
         ]['sku_cumulative_sales_in_the_year'].values[0] == 100
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2018-02-08')
+        ]['sku_cumulative_sales_in_the_year'].values[0] == 0
 
 
 def test_add_sku_warehouse_cumulative_sales_in_the_week():
