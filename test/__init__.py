@@ -10,8 +10,3 @@ from scipy.special import boxcox1p
 from scipy.stats import norm
 from sales.data_holder import DataHolder
 from sklearn.pipeline import Pipeline
-
-NUMERICAL_COLS = ['price', 'size_house', 'size_lot', 'size_basement',
-                  'latitude', 'longitude', 'avg_size_neighbor_houses', 'avg_size_neighbor_lot']
-COLS = ['num_bath', 'num_bed', 'num_floors', 'is_waterfront', 'condition', 'year_built', 'renovation_date', 'zip', 'size_house', 'size_lot', 'size_basement',
-        'latitude', 'longitude', 'avg_size_neighbor_houses', 'avg_size_neighbor_lot']
