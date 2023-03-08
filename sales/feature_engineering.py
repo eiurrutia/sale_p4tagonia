@@ -31,7 +31,7 @@ def add_sku_warehouse_last_xdays_sales(df, days):
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result[f'sku_warehouse_last_{days}days_sales'] = \
-        result[f'sku_warehouse_last_{days}days_sales'].astype(int)
+        result[f'sku_warehouse_last_{days}days_sales'].astype('int64')
     return result
 
 
@@ -66,7 +66,7 @@ def add_y_sku_warehouse_next_xdays_sales(df, days):
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result[f'y_sku_warehouse_next_{days}days_sales'] = \
-        result[f'y_sku_warehouse_next_{days}days_sales'].astype(int)
+        result[f'y_sku_warehouse_next_{days}days_sales'].astype('int64')
     return result
 
 
@@ -120,19 +120,30 @@ def add_sku_historic_sales(df):
             format sku_historic_sales
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_historic_sales
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_historic_sales
+            FROM (
+                SELECT sku, date, SUM(quantity) AS quantity
+                FROM df
+                GROUP BY sku, date
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.sku_historic_sales
+        FROM df, cumulative_sales
+        WHERE df.date = cumulative_sales.date
+            AND df.sku = cumulative_sales.sku
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_historic_sales'] = \
-        result['sku_historic_sales'].astype(int)
+        result['sku_historic_sales'].astype('int64')
     return result
 
 
@@ -151,20 +162,19 @@ def add_sku_historic_sales_same_day_of_the_week(df):
             name 'sku_historic_sales_same_day_of_the_week'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_historic_sales_same_day_of_the_week
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND strftime('%w', b.date) = strftime('%w', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, strftime('%w', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_historic_sales_same_day_of_the_week
+        FROM df
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_historic_sales_same_day_of_the_week'] = \
-        result['sku_historic_sales_same_day_of_the_week'].astype(int)
+        result['sku_historic_sales_same_day_of_the_week'].astype('int64')
     return result
 
 
@@ -183,20 +193,34 @@ def add_sku_historic_sales_same_month(df):
             name 'sku_historic_sales_same_month'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_historic_sales_same_month
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND strftime('%m', b.date) = strftime('%m', a.date)
-            AND strftime('%Y', b.date) < strftime('%Y', a.date)
-        GROUP BY a.date, a.sku, a.warehouse
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, month
+                ORDER BY year, month
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_historic_sales_same_month
+            FROM (
+                SELECT sku,
+                    strftime('%m', date) AS month,
+                    strftime('%Y', date) AS year,
+                    SUM(quantity) AS quantity
+                FROM df
+                GROUP BY month, year, sku
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.sku_historic_sales_same_month
+        FROM df, cumulative_sales
+        WHERE strftime('%m', df.date) = cumulative_sales.month
+            AND strftime('%Y', df.date) = cumulative_sales.year
+            AND df.sku = cumulative_sales.sku
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_historic_sales_same_month'] = \
-        result['sku_historic_sales_same_month'].astype(int)
+        result['sku_historic_sales_same_month'].astype('int64')
     return result
 
 
@@ -215,27 +239,26 @@ def add_sku_warehouse_historic_sales(df):
             format sku_warehouse_historic_sales
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_warehouse_historic_sales
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND a.warehouse = b.warehouse
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, warehouse
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_warehouse_historic_sales
+        FROM df
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_historic_sales'] = \
-        result['sku_warehouse_historic_sales'].astype(int)
+        result['sku_warehouse_historic_sales'].astype('int64')
     return result
 
 
 def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
     """
     Adds a new column to the input DataFrame with the quantity of SKUs sold
-    in the same day of the week in the same warehouse.
+    in the same day of the week in the previous same warehouse.
 
     Parameters:
         --------
@@ -247,28 +270,27 @@ def add_sku_warehouse_historic_sales_same_day_of_the_week(df):
             name 'sku_warehouse_historic_sales_same_day_of_the_week'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_warehouse_historic_sales_same_day_of_the_week
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND a.warehouse = b.warehouse
-            AND strftime('%w', b.date) = strftime('%w', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, warehouse, strftime('%w', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_warehouse_historic_sales_same_day_of_the_week
+        FROM df
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_historic_sales_same_day_of_the_week'] = \
-        result['sku_warehouse_historic_sales_same_day_of_the_week'].astype(int)
+        result['sku_warehouse_historic_sales_same_day_of_the_week'
+               ].astype('int64')
     return result
 
 
 def add_sku_warehouse_historic_sales_same_month(df):
     """
     Adds a new column to the input DataFrame with the quantity of SKUs sold
-    in the same month of the year in the same warehouse.
+    in the same month of the previous year in the same warehouse.
 
     Parameters:
         --------
@@ -280,21 +302,35 @@ def add_sku_warehouse_historic_sales_same_month(df):
             name 'sku_warehouse_historic_sales_same_month'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_warehouse_historic_sales_same_month
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND a.warehouse = b.warehouse
-            AND strftime('%m', b.date) = strftime('%m', a.date)
-            AND strftime('%Y', b.date) < strftime('%Y', a.date)
-        GROUP BY a.date, a.sku, a.warehouse
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, warehouse, month
+                ORDER BY year, month
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_warehouse_historic_sales_same_month
+            FROM (
+                SELECT sku, warehouse,
+                    strftime('%m', date) AS month,
+                    strftime('%Y', date) AS year,
+                    SUM(quantity) AS quantity
+                FROM df
+                GROUP BY month, year, sku, warehouse
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.sku_warehouse_historic_sales_same_month
+        FROM df, cumulative_sales
+        WHERE strftime('%m', df.date) = cumulative_sales.month
+            AND strftime('%Y', df.date) = cumulative_sales.year
+            AND df.sku = cumulative_sales.sku
+            AND df.warehouse = cumulative_sales.warehouse
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_historic_sales_same_month'] = \
-        result['sku_warehouse_historic_sales_same_month'].astype(int)
+        result['sku_warehouse_historic_sales_same_month'].astype('int64')
     return result
 
 
@@ -320,7 +356,7 @@ def add_unit_price_information(df):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['unit_price'] = result['unit_price'].astype(int)
+    result['unit_price'] = result['unit_price'].astype('int64')
     return result
 
 
@@ -345,7 +381,7 @@ def add_weekday_information(df):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['weekday'] = result['weekday'].astype(int)
+    result['weekday'] = result['weekday'].astype('int64')
     return result
 
 
@@ -371,7 +407,7 @@ def add_month_information(df):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['month'] = result['month'].astype(int)
+    result['month'] = result['month'].astype('int64')
     return result
 
 
@@ -396,7 +432,7 @@ def add_year_information(df):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['year'] = result['year'].astype(int)
+    result['year'] = result['year'].astype('int64')
     return result
 
 
@@ -430,7 +466,7 @@ def add_offer_day_information(df_sales, df_offer_campaigns):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['is_offer_day'] = result['is_offer_day'].astype(int)
+    result['is_offer_day'] = result['is_offer_day'].astype('int64')
     return result
 
 
@@ -460,7 +496,8 @@ def add_warehouse_is_metropolitan_zone(df_sales, df_warehouses):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['is_metropolitan_zone'] = result['is_metropolitan_zone'].astype(int)
+    result['is_metropolitan_zone'] = \
+        result['is_metropolitan_zone'].astype('int64')
     return result
 
 
@@ -489,7 +526,7 @@ def add_warehouse_is_inside_mall(df_sales, df_warehouses):
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
-    result['is_inside_mall'] = result['is_inside_mall'].astype(int)
+    result['is_inside_mall'] = result['is_inside_mall'].astype('int64')
     return result
 
 
@@ -508,20 +545,30 @@ def add_sku_cumulative_sales_in_the_week(df):
             name 'sku_cumulative_sales_in_the_week'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_cumulative_sales_in_the_week
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND strftime('%W-%Y', b.date) = strftime('%W-%Y', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, strftime('%W-%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_cumulative_sales_in_the_week
+            FROM (
+                SELECT sku, date, SUM(quantity) AS quantity
+                FROM df
+                GROUP BY sku, date
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.sku_cumulative_sales_in_the_week
+        FROM df, cumulative_sales
+        WHERE df.date = cumulative_sales.date
+            AND df.sku = cumulative_sales.sku
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_cumulative_sales_in_the_week'] = \
-        result['sku_cumulative_sales_in_the_week'].astype(int)
+        result['sku_cumulative_sales_in_the_week'].astype('int64')
     return result
 
 
@@ -540,20 +587,30 @@ def add_sku_cumulative_sales_in_the_month(df):
             name 'sku_cumulative_sales_in_the_month'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_cumulative_sales_in_the_month
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND strftime('%m-%Y', b.date) = strftime('%m-%Y', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, strftime('%m-%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_cumulative_sales_in_the_month
+            FROM (
+                SELECT sku, date, SUM(quantity) AS quantity
+                FROM df
+                GROUP BY sku, date
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.sku_cumulative_sales_in_the_month
+        FROM df, cumulative_sales
+        WHERE df.date = cumulative_sales.date
+            AND df.sku = cumulative_sales.sku
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_cumulative_sales_in_the_month'] = \
-        result['sku_cumulative_sales_in_the_month'].astype(int)
+        result['sku_cumulative_sales_in_the_month'].astype('int64')
     return result
 
 
@@ -572,20 +629,30 @@ def add_sku_cumulative_sales_in_the_year(df):
             name 'sku_cumulative_sales_in_the_year'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_cumulative_sales_in_the_year
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND strftime('%Y', b.date) = strftime('%Y', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, strftime('%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_cumulative_sales_in_the_year
+            FROM (
+                SELECT sku, date, SUM(quantity) AS quantity
+                FROM df
+                GROUP BY sku, date
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.sku_cumulative_sales_in_the_year
+        FROM df, cumulative_sales
+        WHERE df.date = cumulative_sales.date
+            AND df.sku = cumulative_sales.sku
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_cumulative_sales_in_the_year'] = \
-        result['sku_cumulative_sales_in_the_year'].astype(int)
+        result['sku_cumulative_sales_in_the_year'].astype('int64')
     return result
 
 
@@ -604,21 +671,19 @@ def add_sku_warehouse_cumulative_sales_in_the_week(df):
             name 'sku_warehouse_cumulative_sales_in_the_week'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_warehouse_cumulative_sales_in_the_week
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND a.warehouse = b.warehouse
-            AND strftime('%W-%Y', b.date) = strftime('%W-%Y', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, warehouse, strftime('%W-%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_warehouse_cumulative_sales_in_the_week
+        FROM df
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_cumulative_sales_in_the_week'] = \
-        result['sku_warehouse_cumulative_sales_in_the_week'].astype(int)
+        result['sku_warehouse_cumulative_sales_in_the_week'].astype('int64')
     return result
 
 
@@ -637,21 +702,20 @@ def add_sku_warehouse_cumulative_sales_in_the_month(df):
             name 'sku_warehouse_cumulative_sales_in_the_month'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_warehouse_cumulative_sales_in_the_month
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND a.warehouse = b.warehouse
-            AND strftime('%m-%Y', b.date) = strftime('%m-%Y', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, warehouse, strftime('%m-%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_warehouse_cumulative_sales_in_the_month
+        FROM df
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_cumulative_sales_in_the_month'] = \
-        result['sku_warehouse_cumulative_sales_in_the_month'].astype(int)
+        result['sku_warehouse_cumulative_sales_in_the_month'
+               ].astype('int64')
     return result
 
 
@@ -670,19 +734,17 @@ def add_sku_warehouse_cumulative_sales_in_the_year(df):
             name 'sku_warehouse_cumulative_sales_in_the_year'
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS sku_warehouse_cumulative_sales_in_the_year
-        FROM df a
-        LEFT JOIN df b
-            ON a.sku = b.sku
-            AND a.warehouse = b.warehouse
-            AND strftime('%Y', b.date) = strftime('%Y', a.date)
-            AND b.date < a.date
-        GROUP BY a.date, a.sku, a.warehouse
+        SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY sku, warehouse, strftime('%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS sku_warehouse_cumulative_sales_in_the_year
+        FROM df
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
     result['sku_warehouse_cumulative_sales_in_the_year'] = \
-        result['sku_warehouse_cumulative_sales_in_the_year'].astype(int)
+        result['sku_warehouse_cumulative_sales_in_the_year'].astype('int64')
     return result
