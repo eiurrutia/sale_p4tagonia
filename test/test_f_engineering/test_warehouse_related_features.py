@@ -108,3 +108,61 @@ def test_add_warehouse_is_inside_mall():
             (df['warehouse'] == 'LADEHESA') &
             (df['date'] == '2023-02-14')
         ]['is_inside_mall'].values[0] == 1
+
+
+def test_add_warehouse_cumulative_sales_in_the_week():
+    data = {'sku': ["1", "2", "3", "4", "5", "6", "7"],
+            'quantity': [100, 200, 80, 50, 70, 120, 50],
+            'date': [
+                '05-02-2023', '06-02-2023',
+                '12-02-2023', '14-02-2023',
+                '08-02-2023', '09-02-2023',
+                '16-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LADEHESA', 'LADEHESA',
+                'MALLSPORT', 'MALLSPORT',
+                'LADEHESA'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+
+    df = add_warehouse_cumulative_sales_in_the_week(df)
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-06')
+        ]['warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '3') &
+            (df['warehouse'] == 'LADEHESA') &
+            (df['date'] == '2023-02-12')
+        ]['warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '4') &
+            (df['warehouse'] == 'LADEHESA') &
+            (df['date'] == '2023-02-14')
+        ]['warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '7') &
+            (df['warehouse'] == 'LADEHESA') &
+            (df['date'] == '2023-02-16')
+        ]['warehouse_cumulative_sales_in_the_week'].values[0] == 50
+    assert \
+        df[
+            (df['sku'] == '5') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-08')
+        ]['warehouse_cumulative_sales_in_the_week'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '6') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-09')
+        ]['warehouse_cumulative_sales_in_the_week'].values[0] == 70
