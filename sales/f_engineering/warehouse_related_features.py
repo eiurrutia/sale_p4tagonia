@@ -143,3 +143,45 @@ def add_warehouse_cumulative_sales_in_the_month(df):
     result['warehouse_cumulative_sales_in_the_month'] = \
         result['warehouse_cumulative_sales_in_the_month'].astype('int64')
     return result
+
+
+def add_warehouse_cumulative_sales_in_the_year(df):
+    """
+    Adds a new column to the input DataFrame with the cumulative year
+    sales for the warehouse considering all skus.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'warehouse_cumulative_sales_in_the_year'
+    """
+    query = f'''
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY warehouse, strftime('%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS warehouse_cumulative_sales_in_the_year
+            FROM (
+                SELECT warehouse, date, SUM(quantity) AS quantity
+                FROM df
+                GROUP BY warehouse, date
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.warehouse_cumulative_sales_in_the_year
+        FROM df, cumulative_sales
+        WHERE df.date = cumulative_sales.date
+            AND df.warehouse = cumulative_sales.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['warehouse_cumulative_sales_in_the_year'] = \
+        result['warehouse_cumulative_sales_in_the_year'].astype('int64')
+    return result
