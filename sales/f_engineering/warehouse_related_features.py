@@ -59,3 +59,45 @@ def add_warehouse_is_inside_mall(df_sales, df_warehouses):
     result['date'] = pd.to_datetime(result['date'])
     result['is_inside_mall'] = result['is_inside_mall'].astype('int64')
     return result
+
+
+def add_warehouse_cumulative_sales_in_the_week(df):
+    """
+    Adds a new column to the input DataFrame with the cumulative week
+    sales for the warehouse considering all skus.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            name 'warehouse_cumulative_sales_in_the_week'
+    """
+    query = f'''
+        WITH cumulative_sales AS (
+            SELECT *,
+            COALESCE(SUM(quantity)
+            OVER (
+                PARTITION BY warehouse, strftime('%W-%Y', date)
+                ORDER BY date
+                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ), 0) AS warehouse_cumulative_sales_in_the_week
+            FROM (
+                SELECT warehouse, date, SUM(quantity) AS quantity
+                FROM df
+                GROUP BY warehouse, date
+            )
+        )
+        SELECT df.*,
+            cumulative_sales.warehouse_cumulative_sales_in_the_week
+        FROM df, cumulative_sales
+        WHERE df.date = cumulative_sales.date
+            AND df.warehouse = cumulative_sales.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result['warehouse_cumulative_sales_in_the_week'] = \
+        result['warehouse_cumulative_sales_in_the_week'].astype('int64')
+    return result
