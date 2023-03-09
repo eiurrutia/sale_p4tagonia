@@ -88,7 +88,7 @@ def add_cc_warehouse_last_xdays_mean_sales(df, days):
     """
     query = f'''
         SELECT a.*,
-           COALESCE(ROUND(AVG(b.quantity), 2), 0)
+           COALESCE(ROUND(SUM(b.quantity)/{days}.0, 4), 0)
             AS cc_warehouse_last_{days}days_mean_sales
         FROM df a
         LEFT JOIN df b

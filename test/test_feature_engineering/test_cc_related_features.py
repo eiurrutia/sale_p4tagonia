@@ -128,31 +128,36 @@ def test_add_cc_warehouse_last_xdays_mean_sales():
             (df['cc'] == '1') &
             (df['warehouse'] == 'LASCONDES') &
             (df['date'] == '2023-02-08')
-        ][f'cc_warehouse_last_{days}days_mean_sales'].values[0] == float(6.5)
+        ][f'cc_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(13/days), 4)
     assert \
         df[
             (df['cc'] == '1') &
             (df['warehouse'] == 'LASCONDES') &
             (df['date'] == '2023-02-07')
-        ][f'cc_warehouse_last_{days}days_mean_sales'].values[0] == float(6.0)
+        ][f'cc_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(6/days), 4)
     assert \
         df[
             (df['cc'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-19')
-        ][f'cc_warehouse_last_{days}days_mean_sales'].values[0] == float(0.0)
+        ][f'cc_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(0/days), 4)
     assert \
         df[
             (df['cc'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-08')
-        ][f'cc_warehouse_last_{days}days_mean_sales'].values[0] == float(0.0)
+        ][f'cc_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(0/days), 4)
     assert \
         df[
             (df['cc'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-24')
-        ][f'cc_warehouse_last_{days}days_mean_sales'].values[0] == float(4.33)
+        ][f'cc_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(13/days), 4)
 
 
 def test_add_cc_historic_sales():

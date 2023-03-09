@@ -128,31 +128,36 @@ def test_add_sku_warehouse_last_xdays_mean_sales():
             (df['sku'] == '1') &
             (df['warehouse'] == 'LASCONDES') &
             (df['date'] == '2023-02-08')
-        ][f'sku_warehouse_last_{days}days_mean_sales'].values[0] == float(6.5)
+        ][f'sku_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(13/days), 4)
     assert \
         df[
             (df['sku'] == '1') &
             (df['warehouse'] == 'LASCONDES') &
             (df['date'] == '2023-02-07')
-        ][f'sku_warehouse_last_{days}days_mean_sales'].values[0] == float(6.0)
+        ][f'sku_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(6/days), 4)
     assert \
         df[
             (df['sku'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-19')
-        ][f'sku_warehouse_last_{days}days_mean_sales'].values[0] == float(0.0)
+        ][f'sku_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(0/days), 4)
     assert \
         df[
             (df['sku'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-08')
-        ][f'sku_warehouse_last_{days}days_mean_sales'].values[0] == float(0.0)
+        ][f'sku_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(0/days), 4)
     assert \
         df[
             (df['sku'] == '2') &
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-24')
-        ][f'sku_warehouse_last_{days}days_mean_sales'].values[0] == float(4.33)
+        ][f'sku_warehouse_last_{days}days_mean_sales'
+          ].values[0] == round(float(13/days), 4)
 
 
 def test_add_sku_historic_sales():
