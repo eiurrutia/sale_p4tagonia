@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from sales.data_holder import DataHolder
-from sales.f_engineering.cc_related_features import *
+from sales.feature_engineering.cc_related_features import *
 
 
 def test_add_cc_warehouse_last_xdays_sales():

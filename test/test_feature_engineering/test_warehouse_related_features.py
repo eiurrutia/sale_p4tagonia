@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from sales.data_holder import DataHolder
-from sales.f_engineering.warehouse_related_features import *
+from sales.feature_engineering.warehouse_related_features import *
 
 
 def test_add_warehouse_is_metropolitan_zone():
