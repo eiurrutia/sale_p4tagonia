@@ -110,6 +110,55 @@ def test_add_warehouse_is_inside_mall():
         ]['is_inside_mall'].values[0] == 1
 
 
+def test_add_warehouse_last_xdays_sales():
+    data = {'sku': ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+            'quantity': [5, 6, 7, 8, 4, 3, 5, 6, 3],
+            'date': [
+                '08-02-2023', '06-02-2023',
+                '07-02-2023', '08-02-2023',
+                '19-02-2023', '08-02-2023',
+                '07-02-2023', '02-02-2023',
+                '09-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT',
+                'MALLSPORT', 'LADEHESA',
+                'COSTANERA', 'MALLSPORT',
+                'MALLSPORT'
+            ]}
+    df = pd.DataFrame(data)
+    # Convert the date column to datetime type
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    days = 7
+
+    df = add_warehouse_last_xdays_sales(df, days)
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-08')
+        ][f'warehouse_last_{days}days_sales'].values[0] == 13
+    assert \
+        df[
+            (df['sku'] == '9') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-09')
+        ][f'warehouse_last_{days}days_sales'].values[0] == 14
+    assert \
+        df[
+            (df['sku'] == '5') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-19')
+        ][f'warehouse_last_{days}days_sales'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '4') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-08')
+        ][f'warehouse_last_{days}days_sales'].values[0] == 6
+
+
 def test_add_warehouse_cumulative_sales_in_the_week():
     data = {'sku': ["1", "2", "3", "4", "5", "6", "7"],
             'quantity': [100, 200, 80, 50, 70, 120, 50],
