@@ -78,14 +78,28 @@ def add_warehouse_last_xdays_sales(df, days):
             format warehouse_last_{days}days_sales
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0) AS warehouse_last_{days}days_sales
-        FROM df a
-        LEFT JOIN df b
-            ON a.warehouse = b.warehouse
-            AND b.date >= DATE(a.date, '-{days} day')
-            AND b.date < a.date
-        GROUP BY a.date, a.warehouse
+        WITH
+        date_warehouse_sale AS (
+            SELECT date, warehouse, SUM(quantity) AS quantity
+            FROM df
+            GROUP BY date, warehouse
+        ),
+        date_warehouse_last_days AS (
+            SELECT a.date, a.warehouse,
+                COALESCE(SUM(b.quantity), 0) AS warehouse_last_{days}days_sales
+            FROM date_warehouse_sale a
+            LEFT JOIN date_warehouse_sale b
+                ON a.warehouse = b.warehouse
+                AND b.date >= DATE(a.date, '-{days} day')
+                AND b.date < a.date
+            GROUP BY a.date, a.warehouse
+        )
+        SELECT df.*,
+            date_warehouse_last_days.warehouse_last_{days}days_sales
+                AS warehouse_last_{days}days_sales
+        FROM df, date_warehouse_last_days
+        WHERE df.date = date_warehouse_last_days.date
+            AND df.warehouse = date_warehouse_last_days.warehouse
     '''
     result = ps.sqldf(query)
     result['date'] = pd.to_datetime(result['date'])
