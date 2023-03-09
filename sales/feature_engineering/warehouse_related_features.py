@@ -108,6 +108,57 @@ def add_warehouse_last_xdays_sales(df, days):
     return result
 
 
+def add_warehouse_last_xdays_mean_sales(df, days):
+    """
+    Adds a new column to the input DataFrame with the mean of products sold
+    in the last 'days' in the same warehouse.
+
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+        days: Int
+            Number of the days that you want to look back
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format warehouse_last_{days}days_mean_sales
+    """
+    query = f'''
+        WITH
+        date_warehouse_sale AS (
+            SELECT date, warehouse, SUM(quantity) AS quantity
+            FROM df
+            GROUP BY date, warehouse
+        ),
+        date_warehouse_last_days AS (
+            SELECT a.date, a.warehouse,
+                COALESCE(SUM(b.quantity), 0) AS warehouse_last_{days}days_sales
+            FROM date_warehouse_sale a
+            LEFT JOIN date_warehouse_sale b
+                ON a.warehouse = b.warehouse
+                AND b.date >= DATE(a.date, '-{days} day')
+                AND b.date < a.date
+            GROUP BY a.date, a.warehouse
+        )
+        SELECT df.*,
+            COALESCE(
+                ROUND(
+                    date_warehouse_last_days.warehouse_last_{days}days_sales
+                    / {days}.0,
+                    4),
+                0) AS warehouse_last_{days}days_mean_sales
+        FROM df, date_warehouse_last_days
+        WHERE df.date = date_warehouse_last_days.date
+            AND df.warehouse = date_warehouse_last_days.warehouse
+    '''
+    result = ps.sqldf(query)
+    result['date'] = pd.to_datetime(result['date'])
+    result[f'warehouse_last_{days}days_mean_sales'] = \
+        result[f'warehouse_last_{days}days_mean_sales'].astype(float)
+    return result
+
+
 def add_warehouse_cumulative_sales_in_the_week(df):
     """
     Adds a new column to the input DataFrame with the cumulative week
