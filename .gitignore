@@ -1,4 +1,5 @@
 data/*
 **/__pycache__
 sales/__pycache__/*
+sales/local_settings.py
 test/__pycache__/*
