@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, OrdinalEncoder
 from sklearn.compose import make_column_transformer
 import scipy
+import psycopg2
 from scipy import stats
 from scipy.special import boxcox1p
 from scipy.stats import norm
