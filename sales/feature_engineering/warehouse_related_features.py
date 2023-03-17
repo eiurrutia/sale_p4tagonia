@@ -1,7 +1,7 @@
-from sales import sns, norm, plt, stats, np, pd, ps, data_holder
+from sales import sns, norm, plt, stats, np, pd, ps, data_holder, psycopg2
 
 
-def add_warehouse_is_metropolitan_zone(df_sales, df_warehouses):
+def add_warehouse_is_metropolitan_zone(conn):
     """
     Adds a new column to the Sales DataFrame with a column that show if
     the row data correspond to a sale in a warehouse located in RM.
@@ -19,20 +19,19 @@ def add_warehouse_is_metropolitan_zone(df_sales, df_warehouses):
             column is_metropolitan_zone
     """
     query = f'''
-        SELECT df_s.*,
-            COALESCE(df_w.is_metropolitan_zone, 0) AS is_metropolitan_zone
-        FROM df_sales df_s
-        LEFT JOIN df_warehouses df_w
-            ON df_s.warehouse = df_w.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN is_metropolitan_zone INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET is_metropolitan_zone = COALESCE(df_w.is_metropolitan_zone, 0)
+    FROM df_warehouse df_w
+    WHERE df_sale.warehouse = df_w.warehouse
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['is_metropolitan_zone'] = \
-        result['is_metropolitan_zone'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_warehouse_is_inside_mall(df_sales, df_warehouses):
+def add_warehouse_is_inside_mall(conn):
     """
     Adds a new column to the Sales DataFrame with a column that show if
     the row data correspond to a sale in a warehouse located inside a mall.
@@ -50,18 +49,19 @@ def add_warehouse_is_inside_mall(df_sales, df_warehouses):
             column is_inside_mall
     """
     query = f'''
-        SELECT df_s.*, COALESCE(df_w.is_inside_mall, 0) AS is_inside_mall
-        FROM df_sales df_s
-        LEFT JOIN df_warehouses df_w
-            ON df_s.warehouse = df_w.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN is_inside_mall INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET is_inside_mall = COALESCE(df_w.is_inside_mall, 0)
+    FROM df_warehouse df_w
+    WHERE df_sale.warehouse = df_w.warehouse
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['is_inside_mall'] = result['is_inside_mall'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_warehouse_last_xdays_sales(df, days):
+def add_warehouse_last_xdays_sales(conn, days):
     """
     Adds a new column to the input DataFrame with the quantity products sold
     in the last 'days' in the same warehouse.
@@ -78,37 +78,38 @@ def add_warehouse_last_xdays_sales(df, days):
             format warehouse_last_{days}days_sales
     """
     query = f'''
-        WITH
-        date_warehouse_sale AS (
-            SELECT date, warehouse, SUM(quantity) AS quantity
-            FROM df
-            GROUP BY date, warehouse
-        ),
-        date_warehouse_last_days AS (
-            SELECT a.date, a.warehouse,
-                COALESCE(SUM(b.quantity), 0) AS warehouse_last_{days}days_sales
-            FROM date_warehouse_sale a
-            LEFT JOIN date_warehouse_sale b
-                ON a.warehouse = b.warehouse
-                AND b.date >= DATE(a.date, '-{days} day')
-                AND b.date < a.date
-            GROUP BY a.date, a.warehouse
-        )
-        SELECT df.*,
-            date_warehouse_last_days.warehouse_last_{days}days_sales
-                AS warehouse_last_{days}days_sales
-        FROM df, date_warehouse_last_days
-        WHERE df.date = date_warehouse_last_days.date
-            AND df.warehouse = date_warehouse_last_days.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN warehouse_last_{days}days_sales INTEGER DEFAULT 0;
+    WITH date_warehouse_sale AS (
+        SELECT date, warehouse, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY date, warehouse
+    ),
+    last_warehouse_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY warehouse
+            ORDER BY date
+            RANGE BETWEEN
+                INTERVAL '{days} DAY' PRECEDING
+                AND INTERVAL '1 DAY' PRECEDING
+        ), 0) AS calculated
+        FROM date_warehouse_sale
+    )
+    UPDATE df_sale
+    SET warehouse_last_{days}days_sales =
+        lws.calculated
+    FROM last_warehouse_sales lws
+    WHERE df_sale.warehouse = lws.warehouse
+        AND df_sale.date = lws.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result[f'warehouse_last_{days}days_sales'] = \
-        result[f'warehouse_last_{days}days_sales'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_warehouse_last_xdays_mean_sales(df, days):
+def add_warehouse_last_xdays_mean_sales(conn, days):
     """
     Adds a new column to the input DataFrame with the mean of products sold
     in the last 'days' in the same warehouse.
@@ -125,41 +126,38 @@ def add_warehouse_last_xdays_mean_sales(df, days):
             format warehouse_last_{days}days_mean_sales
     """
     query = f'''
-        WITH
-        date_warehouse_sale AS (
-            SELECT date, warehouse, SUM(quantity) AS quantity
-            FROM df
-            GROUP BY date, warehouse
-        ),
-        date_warehouse_last_days AS (
-            SELECT a.date, a.warehouse,
-                COALESCE(SUM(b.quantity), 0) AS warehouse_last_{days}days_sales
-            FROM date_warehouse_sale a
-            LEFT JOIN date_warehouse_sale b
-                ON a.warehouse = b.warehouse
-                AND b.date >= DATE(a.date, '-{days} day')
-                AND b.date < a.date
-            GROUP BY a.date, a.warehouse
-        )
-        SELECT df.*,
-            COALESCE(
-                ROUND(
-                    date_warehouse_last_days.warehouse_last_{days}days_sales
-                    / {days}.0,
-                    4),
-                0) AS warehouse_last_{days}days_mean_sales
-        FROM df, date_warehouse_last_days
-        WHERE df.date = date_warehouse_last_days.date
-            AND df.warehouse = date_warehouse_last_days.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN warehouse_last_{days}days_mean_sales FLOAT DEFAULT 0.0;
+    WITH date_warehouse_sale AS (
+        SELECT date, warehouse, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY date, warehouse
+    ),
+    last_warehouse_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY warehouse
+            ORDER BY date
+            RANGE BETWEEN
+                INTERVAL '{days} DAY' PRECEDING
+                AND INTERVAL '1 DAY' PRECEDING
+        ), 0) AS calculated
+        FROM date_warehouse_sale
+    )
+    UPDATE df_sale
+    SET warehouse_last_{days}days_mean_sales =
+        COALESCE(ROUND(lws.calculated/{days}.0, 4), 0)
+    FROM last_warehouse_sales lws
+    WHERE df_sale.warehouse = lws.warehouse
+        AND df_sale.date = lws.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result[f'warehouse_last_{days}days_mean_sales'] = \
-        result[f'warehouse_last_{days}days_mean_sales'].astype(float)
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_warehouse_cumulative_sales_in_the_week(df):
+def add_warehouse_cumulative_sales_in_the_week(conn):
     """
     Adds a new column to the input DataFrame with the cumulative week
     sales for the warehouse considering all skus.
@@ -174,34 +172,35 @@ def add_warehouse_cumulative_sales_in_the_week(df):
             name 'warehouse_cumulative_sales_in_the_week'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY warehouse, strftime('%W-%Y', date)
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS warehouse_cumulative_sales_in_the_week
-            FROM (
-                SELECT warehouse, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY warehouse, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.warehouse_cumulative_sales_in_the_week
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.warehouse = cumulative_sales.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN warehouse_cumulative_sales_in_the_week INTEGER DEFAULT 0;
+    WITH date_warehouse_sale AS (
+        SELECT warehouse, date, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY warehouse, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY warehouse, to_char(date, 'IW-IYYY')
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM date_warehouse_sale
+    )
+    UPDATE df_sale
+    SET warehouse_cumulative_sales_in_the_week = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.warehouse = cs.warehouse
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['warehouse_cumulative_sales_in_the_week'] = \
-        result['warehouse_cumulative_sales_in_the_week'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_warehouse_cumulative_sales_in_the_month(df):
+def add_warehouse_cumulative_sales_in_the_month(conn):
     """
     Adds a new column to the input DataFrame with the cumulative month
     sales for the warehouse considering all skus.
@@ -216,34 +215,35 @@ def add_warehouse_cumulative_sales_in_the_month(df):
             name 'warehouse_cumulative_sales_in_the_month'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY warehouse, strftime('%m-%Y', date)
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS warehouse_cumulative_sales_in_the_month
-            FROM (
-                SELECT warehouse, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY warehouse, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.warehouse_cumulative_sales_in_the_month
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.warehouse = cumulative_sales.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN warehouse_cumulative_sales_in_the_month INTEGER DEFAULT 0;
+    WITH date_warehouse_sale AS (
+        SELECT warehouse, date, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY warehouse, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY warehouse, to_char(date, 'MM-YYYY')
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM date_warehouse_sale
+    )
+    UPDATE df_sale
+    SET warehouse_cumulative_sales_in_the_month = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.warehouse = cs.warehouse
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['warehouse_cumulative_sales_in_the_month'] = \
-        result['warehouse_cumulative_sales_in_the_month'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_warehouse_cumulative_sales_in_the_year(df):
+def add_warehouse_cumulative_sales_in_the_year(conn):
     """
     Adds a new column to the input DataFrame with the cumulative year
     sales for the warehouse considering all skus.
@@ -258,28 +258,29 @@ def add_warehouse_cumulative_sales_in_the_year(df):
             name 'warehouse_cumulative_sales_in_the_year'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY warehouse, strftime('%Y', date)
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS warehouse_cumulative_sales_in_the_year
-            FROM (
-                SELECT warehouse, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY warehouse, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.warehouse_cumulative_sales_in_the_year
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.warehouse = cumulative_sales.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN warehouse_cumulative_sales_in_the_year INTEGER DEFAULT 0;
+    WITH date_warehouse_sale AS (
+        SELECT warehouse, date, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY warehouse, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY warehouse, EXTRACT(YEAR FROM date)
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM date_warehouse_sale
+    )
+    UPDATE df_sale
+    SET warehouse_cumulative_sales_in_the_year = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.warehouse = cs.warehouse
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['warehouse_cumulative_sales_in_the_year'] = \
-        result['warehouse_cumulative_sales_in_the_year'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
