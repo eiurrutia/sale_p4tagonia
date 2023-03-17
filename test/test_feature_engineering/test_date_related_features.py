@@ -2,9 +2,44 @@ import pytest
 import pandas as pd
 from sales.data_holder import DataHolder
 from sales.feature_engineering.date_related_features import *
+from sales.local_settings import *
 
 
-def test_add_weekday_information():
+@pytest.fixture
+def test_db():
+    conn = psycopg2.connect(
+        host=TESTDBHOST,
+        dbname=TESTDBNAME,
+        user=TESTDBUSER,
+        password=TESTDBPASS
+    )
+    create_query = '''
+    CREATE TEMPORARY TABLE df_sale (
+        sku VARCHAR,
+        quantity INT,
+        date DATE,
+        warehouse VARCHAR
+    );'''
+    cur = conn.cursor()
+    cur.execute(create_query)
+
+    yield conn
+    conn.close()
+
+
+def create_datatable(conn, data):
+    with conn.cursor() as cursor:
+        cursor.execute('TRUNCATE df_sale;')
+        for i in range(len(data[next(iter(data))])):
+            query = f'''
+            INSERT INTO df_sale (sku, quantity, date, warehouse)
+            VALUES ('{data['sku'][i]}', {data['quantity'][i]},
+            '{data['date'][i]}', '{data['warehouse'][i]}')
+            '''
+            cursor.execute(query)
+
+
+def test_add_weekday_information(test_db):
     data = {'sku': ["1", "1", "1", "2"],
             'quantity': [5, 6, 7, 8],
             'date': [
@@ -15,15 +50,52 @@ def test_add_weekday_information():
                 'LASCONDES', 'LASCONDES',
                 'LASCONDES', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_weekday_information(df)
+    """Apply function"""
+    add_weekday_information(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert df['weekday'].to_list() == [3, 0, 2, 4]
 
 
-def test_month_information():
+def test_add_week_information(test_db):
+    data = {'sku': ["1", "1", "1", "2"],
+            'quantity': [5, 6, 7, 8],
+            'date': [
+                '08-02-2021', '26-02-2023',
+                '07-02-2023', '05-04-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT'
+            ]}
+    """Create temporal database"""
+    create_datatable(test_db, data)
+
+    """Apply function"""
+    add_week_information(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
+    assert df['week'].to_list() == [6, 8, 6, 14]
+
+
+def test_month_information(test_db):
     data = {'sku': ["1", "1", "1", "2"],
             'quantity': [5, 6, 7, 8],
             'date': [
@@ -34,15 +106,24 @@ def test_month_information():
                 'LASCONDES', 'LASCONDES',
                 'LASCONDES', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_month_information(df)
+    """Apply function"""
+    add_month_information(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert df['month'].to_list() == [2, 5, 7, 12]
 
 
-def test_year_information():
+def test_year_information(test_db):
     data = {'sku': ["1", "1", "1", "2"],
             'quantity': [5, 6, 7, 8],
             'date': [
@@ -53,16 +134,25 @@ def test_year_information():
                 'LASCONDES', 'LASCONDES',
                 'LASCONDES', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_year_information(df)
+    """Apply function"""
+    add_year_information(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert df['year'].to_list() == [2018, 2023, 2022, 2019]
 
 
-def test_add_offer_day_information():
-    data_sales = {
+def test_add_offer_day_information(test_db):
+    data_sale = {
                 'sku': ["1", "1", "1", "1", "1", "1"],
                 'quantity': [100, 200, 80, 50, 70, 120],
                 'date': [
@@ -75,7 +165,7 @@ def test_add_offer_day_information():
                     'LADEHESA', 'LADEHESA',
                     'MALLSPORT', 'MALLSPORT'
                 ]}
-    data_campaigns = {
+    data_campaign = {
             'start_date': [
                 '04-02-2023', '13-02-2023',
                 '09-02-2023'
@@ -88,16 +178,39 @@ def test_add_offer_day_information():
                 'SALE1', 'SALE2',
                 'SALE3'
             ]}
-    df_sales = pd.DataFrame(data_sales)
-    df_campaigns = pd.DataFrame(data_campaigns)
-    # Convert the date column to datetime type
-    df_sales['date'] = pd.to_datetime(df_sales['date'], format='%d-%m-%Y')
-    df_campaigns['start_date'] = \
-        pd.to_datetime(df_campaigns['start_date'], format='%d-%m-%Y')
-    df_campaigns['end_date'] = \
-        pd.to_datetime(df_campaigns['end_date'], format='%d-%m-%Y')
+    """Create temporal campaign database"""
+    with test_db.cursor() as cursor:
+        cursor.execute('''
+            CREATE TEMPORARY TABLE df_campaign (
+                start_date DATE,
+                end_date DATE,
+                campaign_name VARCHAR
+            );
+            ''')
+        for i in range(len(data_campaign[next(iter(data_campaign))])):
+            query = f'''
+            INSERT INTO df_campaign (start_date, end_date, campaign_name)
+            VALUES ('{data_campaign['start_date'][i]}',
+            '{data_campaign['end_date'][i]}',
+            '{data_campaign['campaign_name'][i]}')
+            '''
+            cursor.execute(query)
 
-    df = add_offer_day_information(df_sales, df_campaigns)
+    """Create temporal sale database"""
+    create_datatable(test_db, data_sale)
+
+    """Apply function"""
+    add_offer_day_information(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
+    assert df.shape[0] == len(data_sale[next(iter(data_sale))])
     assert \
         df[
             (df['sku'] == '1') &

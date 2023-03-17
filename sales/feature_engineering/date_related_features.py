@@ -1,10 +1,10 @@
-from sales import sns, norm, plt, stats, np, pd, ps, data_holder
+from sales import sns, norm, plt, stats, np, pd, ps, data_holder, psycopg2
 
 
-def add_weekday_information(df):
+def add_weekday_information(conn):
     """
     Adds a new column to the input DataFrame with a column that explain which
-    day of the week correspon the date:
+    day of the week correspond the date:
         0 --> Sunday, 1 --> Monday, 6 --> Saturday
     Parameters:
         --------
@@ -16,17 +16,40 @@ def add_weekday_information(df):
             format weekday
     """
     query = f'''
-        SELECT *,
-            strftime('%w', date) AS weekday
-        FROM df
+    ALTER TABLE df_sale ADD COLUMN weekday INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET weekday = EXTRACT(DOW FROM date)
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['weekday'] = result['weekday'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_month_information(df):
+def add_week_information(conn):
+    """
+    Adds a new column to the input DataFrame with a column that explain which
+    week of the year correspond the date:
+        1, 2, ... 52
+    Parameters:
+        --------
+        df: DataFrame
+            The input DataFrame with the sales data.
+        --------
+    Returns:
+        DataFrame: The input DataFrame with the new column added with the
+            format week
+    """
+    query = f'''
+    ALTER TABLE df_sale ADD COLUMN week INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET week = EXTRACT(WEEK FROM date)
+    '''
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
+
+
+def add_month_information(conn):
     """
     Adds a new column to the input DataFrame with a column that explain which
     month of the week correspond the date:
@@ -42,17 +65,16 @@ def add_month_information(df):
             format month in number
     """
     query = f'''
-        SELECT *,
-            strftime('%m', date) AS month
-        FROM df
+    ALTER TABLE df_sale ADD COLUMN month INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET month = EXTRACT(MONTH FROM date)
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['month'] = result['month'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_year_information(df):
+def add_year_information(conn):
     """
     Adds a new column to the input DataFrame with a column that explain which
     month of the week correspond the date: 2018, 2019, ..., 2023
@@ -64,20 +86,19 @@ def add_year_information(df):
         --------
     Returns:
         DataFrame: The input DataFrame with the new column added with the
-            format month in number
+            format year in number
     """
     query = f'''
-        SELECT *,
-            strftime('%Y', date) AS year
-        FROM df
+    ALTER TABLE df_sale ADD COLUMN year INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET year = EXTRACT(YEAR FROM date)
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['year'] = result['year'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_offer_day_information(df_sales, df_offer_campaigns):
+def add_offer_day_information(conn):
     """
     Adds a new column to the Sales DataFrame with a column that show if
     the row data correspond to a sale in offer campaigns period.
@@ -95,17 +116,17 @@ def add_offer_day_information(df_sales, df_offer_campaigns):
             column is_offer_day
     """
     query = f'''
-        SELECT df_s.*,
-            CASE WHEN df_oc.start_date <= df_s.date
-                    AND df_s.date <= df_oc.end_date
+    ALTER TABLE df_sale ADD COLUMN is_offer_day INTEGER DEFAULT 0;
+    UPDATE df_sale
+    SET is_offer_day =
+        CASE WHEN df_c.start_date <= df_sale.date
+                    AND df_sale.date <= df_c.end_date
                 THEN 1
                 ELSE 0
-            END AS is_offer_day
-        FROM df_sales df_s
-        LEFT JOIN df_offer_campaigns df_oc
-            ON df_s.date BETWEEN dF_oc.start_date AND df_oc.end_date
+        END
+    FROM df_campaign df_c
+    WHERE df_sale.date BETWEEN df_c.start_date AND df_c.end_date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['is_offer_day'] = result['is_offer_day'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
