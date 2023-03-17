@@ -735,7 +735,7 @@ def test_add_cc_cumulative_sales_in_the_year(test_db):
     create_datatable(test_db, data)
 
     """Apply function"""
-    add_cc_cumulative_sales_in_the_year (test_db)
+    add_cc_cumulative_sales_in_the_year(test_db)
 
     """Check the results"""
     with test_db.cursor() as cursor:
