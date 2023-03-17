@@ -2,9 +2,44 @@ import pytest
 import pandas as pd
 from sales.data_holder import DataHolder
 from sales.feature_engineering.sku_related_features import *
+from sales.local_settings import *
 
 
-def test_add_sku_warehouse_last_xdays_sales():
+@pytest.fixture
+def test_db():
+    conn = psycopg2.connect(
+        host=TESTDBHOST,
+        dbname=TESTDBNAME,
+        user=TESTDBUSER,
+        password=TESTDBPASS
+    )
+    create_query = '''
+    CREATE TEMPORARY TABLE df_sale (
+        sku VARCHAR,
+        quantity INT,
+        date DATE,
+        warehouse VARCHAR
+    );'''
+    cur = conn.cursor()
+    cur.execute(create_query)
+
+    yield conn
+    conn.close()
+
+
+def create_datatable(conn, data):
+    with conn.cursor() as cursor:
+        cursor.execute('TRUNCATE df_sale;')
+        for i in range(len(data[next(iter(data))])):
+            query = f'''
+            INSERT INTO df_sale (sku, quantity, date, warehouse)
+            VALUES ('{data['sku'][i]}', {data['quantity'][i]},
+            '{data['date'][i]}', '{data['warehouse'][i]}')
+            '''
+            cursor.execute(query)
+
+
+def test_add_sku_warehouse_last_xdays_sales(test_db):
     data = {'sku': ["1", "1", "1", "2", "2", "4", "4", "2", "2"],
             'quantity': [5, 6, 7, 8, 4, 3, 5, 6, 3],
             'date': [
@@ -21,12 +56,21 @@ def test_add_sku_warehouse_last_xdays_sales():
                 'COSTANERA', 'MALLSPORT',
                 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-    days = 7
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_last_xdays_sales(df, days)
+    """Apply function"""
+    days = 7
+    add_sku_warehouse_last_xdays_sales(test_db, days)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -53,7 +97,7 @@ def test_add_sku_warehouse_last_xdays_sales():
         ][f'sku_warehouse_last_{days}days_sales'].values[0] == 6
 
 
-def test_add_y_sku_warehouse_next_xdays_sales():
+def test_add_y_sku_warehouse_next_xdays_sales(test_db):
     data = {'sku': ["1", "1", "1", "2", "2", "4", "4", "2", "2", "2"],
             'quantity': [5, 6, 7, 8, 4, 3, 5, 6, 3, 5],
             'date': [
@@ -70,12 +114,21 @@ def test_add_y_sku_warehouse_next_xdays_sales():
                 'COSTANERA', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-    days = 7
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_y_sku_warehouse_next_xdays_sales(df, days)
+    """Apply function"""
+    days = 7
+    add_y_sku_warehouse_next_xdays_sales(test_db, days)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -102,7 +155,7 @@ def test_add_y_sku_warehouse_next_xdays_sales():
         ][f'y_sku_warehouse_next_{days}days_sales'].values[0] == 0
 
 
-def test_add_sku_warehouse_last_xdays_mean_sales():
+def test_add_sku_warehouse_last_xdays_mean_sales(test_db):
     data = {'sku': ["1", "1", "1", "2", "2", "2", "2", "2"],
             'quantity': [5, 6, 7, 8, 4, 7, 2, 5],
             'date': [
@@ -117,12 +170,21 @@ def test_add_sku_warehouse_last_xdays_mean_sales():
                 'MALLSPORT', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-    days = 7
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_last_xdays_mean_sales(df, days)
+    """Apply function"""
+    days = 7
+    add_sku_warehouse_last_xdays_mean_sales(test_db, days)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -160,7 +222,7 @@ def test_add_sku_warehouse_last_xdays_mean_sales():
           ].values[0] == round(float(13/days), 4)
 
 
-def test_add_sku_historic_sales():
+def test_add_sku_historic_sales(test_db):
     data = {'sku': [
                 "1", "1", "2", "2", "2", "2",
                 "2", "4", "4", "4", "4", "4", "2"
@@ -185,11 +247,20 @@ def test_add_sku_historic_sales():
                 'MALLSPORT', 'MALLSPORT',
                 'COSTANERA'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_historic_sales(df)
+    """Apply function"""
+    add_sku_historic_sales(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -222,7 +293,7 @@ def test_add_sku_historic_sales():
         ][f'sku_historic_sales'].values[0] == 27
 
 
-def test_add_sku_historic_sales_same_day_of_the_week():
+def test_add_sku_historic_sales_same_day_of_the_week(test_db):
     data = {'sku': [
                 "1", "1", "2", "2", "2", "2",
                 "2", "4", "4", "4", "4", "4"
@@ -245,11 +316,20 @@ def test_add_sku_historic_sales_same_day_of_the_week():
                 'LADEHESA', 'MALLSPORT',
                 'TEMUCO', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_historic_sales_same_day_of_the_week(df)
+    """Apply function"""
+    add_sku_historic_sales_same_day_of_the_week(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -288,7 +368,7 @@ def test_add_sku_historic_sales_same_day_of_the_week():
         ][f'sku_historic_sales_same_day_of_the_week'].values[0] == 27
 
 
-def test_add_sku_historic_sales_same_month():
+def test_add_sku_historic_sales_same_month(test_db):
     data = {'sku': ["1", "1", "1", "2", "2", "2"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -301,11 +381,20 @@ def test_add_sku_historic_sales_same_month():
                 'COSTANERA', 'TEMUCO',
                 'MALLSPORT', 'PUCON'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_historic_sales_same_month(df)
+    """Apply function"""
+    add_sku_historic_sales_same_month(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -326,7 +415,7 @@ def test_add_sku_historic_sales_same_month():
         ]['sku_historic_sales_same_month'].values[0] == 120
 
 
-def test_add_sku_warehouse_historic_sales():
+def test_add_sku_warehouse_historic_sales(test_db):
     data = {'sku': [
                 "1", "1", "2", "2", "2", "2",
                 "2", "4", "4", "4", "4", "4"
@@ -348,11 +437,20 @@ def test_add_sku_warehouse_historic_sales():
                 'MALLSPORT', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_historic_sales(df)
+    """Apply function"""
+    add_sku_warehouse_historic_sales(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -379,7 +477,7 @@ def test_add_sku_warehouse_historic_sales():
         ][f'sku_warehouse_historic_sales'].values[0] == 27
 
 
-def test_add_sku_warehouse_historic_sales_same_day_of_the_week():
+def test_add_sku_warehouse_historic_sales_same_day_of_the_week(test_db):
     data = {'sku': [
                 "1", "1", "2", "2", "2", "2",
                 "2", "4", "4", "4", "4", "4"
@@ -401,11 +499,20 @@ def test_add_sku_warehouse_historic_sales_same_day_of_the_week():
                 'MALLSPORT', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_historic_sales_same_day_of_the_week(df)
+    """Apply function"""
+    add_sku_warehouse_historic_sales_same_day_of_the_week(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -444,7 +551,7 @@ def test_add_sku_warehouse_historic_sales_same_day_of_the_week():
         ][f'sku_warehouse_historic_sales_same_day_of_the_week'].values[0] == 27
 
 
-def test_add_sku_warehouse_historic_sales_same_month():
+def test_add_sku_warehouse_historic_sales_same_month(test_db):
     data = {'sku': ["1", "1", "1", "2", "2", "2"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -457,11 +564,20 @@ def test_add_sku_warehouse_historic_sales_same_month():
                 'LASCONDES', 'MALLSPORT',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_historic_sales_same_month(df)
+    """Apply function"""
+    add_sku_warehouse_historic_sales_same_month(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -482,7 +598,7 @@ def test_add_sku_warehouse_historic_sales_same_month():
         ]['sku_warehouse_historic_sales_same_month'].values[0] == 120
 
 
-def test_add_unit_price_information():
+def test_add_unit_price_information(test_db):
     data = {'sku': ["1", "1", "1", "2"],
             'quantity': [5, 6, 1, 8],
             'sale_amount': [200, 1800, 7890, 85035],
@@ -494,15 +610,35 @@ def test_add_unit_price_information():
                 'LASCONDES', 'LASCONDES',
                 'LASCONDES', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    with test_db.cursor() as cursor:
+        cursor.execute('TRUNCATE df_sale;')
+        cursor.execute('''
+        ALTER TABLE df_sale ADD COLUMN sale_amount INTEGER DEFAULT 0;
+        ''')
+        for i in range(len(data[next(iter(data))])):
+            query = f'''
+            INSERT INTO df_sale (sku, quantity, sale_amount, date, warehouse)
+            VALUES ('{data['sku'][i]}', {data['quantity'][i]},
+            {data['sale_amount'][i]}, '{data['date'][i]}',
+            '{data['warehouse'][i]}')
+            '''
+            cursor.execute(query)
 
-    df = add_unit_price_information(df)
+    """Apply function"""
+    add_unit_price_information(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
     assert df['unit_price'].to_list() == [40, 300, 7890, 10629]
 
 
-def test_add_sku_cumulative_sales_in_the_week():
+def test_add_sku_cumulative_sales_in_the_week(test_db):
     data = {'sku': ["1", "1", "1", "1", "1", "1"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -515,11 +651,20 @@ def test_add_sku_cumulative_sales_in_the_week():
                 'LADEHESA', 'LADEHESA',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_cumulative_sales_in_the_week(df)
+    """Apply function"""
+    add_sku_cumulative_sales_in_the_week(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -552,7 +697,7 @@ def test_add_sku_cumulative_sales_in_the_week():
         ]['sku_cumulative_sales_in_the_week'].values[0] == 270
 
 
-def test_add_sku_cumulative_sales_in_the_month():
+def test_add_sku_cumulative_sales_in_the_month(test_db):
     data = {'sku': ["1", "1", "1", "1", "1", "1"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -565,11 +710,20 @@ def test_add_sku_cumulative_sales_in_the_month():
                 'LADEHESA', 'LADEHESA',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_cumulative_sales_in_the_month(df)
+    """Apply function"""
+    add_sku_cumulative_sales_in_the_month(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -602,7 +756,7 @@ def test_add_sku_cumulative_sales_in_the_month():
         ]['sku_cumulative_sales_in_the_month'].values[0] == 0
 
 
-def test_add_sku_cumulative_sales_in_the_year():
+def test_add_sku_cumulative_sales_in_the_year(test_db):
     data = {'sku': ["1", "1", "1", "1", "1", "1"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -615,11 +769,20 @@ def test_add_sku_cumulative_sales_in_the_year():
                 'LADEHESA', 'LADEHESA',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_cumulative_sales_in_the_year(df)
+    """Apply function"""
+    add_sku_cumulative_sales_in_the_year(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -658,7 +821,7 @@ def test_add_sku_cumulative_sales_in_the_year():
         ]['sku_cumulative_sales_in_the_year'].values[0] == 0
 
 
-def test_add_sku_warehouse_cumulative_sales_in_the_week():
+def test_add_sku_warehouse_cumulative_sales_in_the_week(test_db):
     data = {'sku': ["1", "1", "1", "1", "1", "1"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -671,11 +834,20 @@ def test_add_sku_warehouse_cumulative_sales_in_the_week():
                 'LASCONDES', 'LASCONDES',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_cumulative_sales_in_the_week(df)
+    """Apply function"""
+    add_sku_warehouse_cumulative_sales_in_the_week(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -708,7 +880,7 @@ def test_add_sku_warehouse_cumulative_sales_in_the_week():
         ]['sku_warehouse_cumulative_sales_in_the_week'].values[0] == 70
 
 
-def test_add_sku_warehouse_cumulative_sales_in_the_month():
+def test_add_sku_warehouse_cumulative_sales_in_the_month(test_db):
     data = {'sku': ["1", "1", "1", "1", "2", "2"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -721,11 +893,20 @@ def test_add_sku_warehouse_cumulative_sales_in_the_month():
                 'LASCONDES', 'LASCONDES',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_cumulative_sales_in_the_month(df)
+    """Apply function"""
+    add_sku_warehouse_cumulative_sales_in_the_month(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
@@ -758,7 +939,7 @@ def test_add_sku_warehouse_cumulative_sales_in_the_month():
         ]['sku_warehouse_cumulative_sales_in_the_month'].values[0] == 0
 
 
-def test_add_sku_warehouse_cumulative_sales_in_the_year():
+def test_add_sku_warehouse_cumulative_sales_in_the_year(test_db):
     data = {'sku': ["1", "1", "1", "1", "2", "2"],
             'quantity': [100, 200, 80, 50, 70, 120],
             'date': [
@@ -771,11 +952,20 @@ def test_add_sku_warehouse_cumulative_sales_in_the_year():
                 'LASCONDES', 'LASCONDES',
                 'MALLSPORT', 'MALLSPORT'
             ]}
-    df = pd.DataFrame(data)
-    # Convert the date column to datetime type
-    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+    """Create temporal database"""
+    create_datatable(test_db, data)
 
-    df = add_sku_warehouse_cumulative_sales_in_the_year(df)
+    """Apply function"""
+    add_sku_warehouse_cumulative_sales_in_the_year(test_db)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
     assert \
         df[
             (df['sku'] == '1') &
