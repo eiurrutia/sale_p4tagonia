@@ -1,7 +1,7 @@
-from sales import sns, norm, plt, stats, np, pd, ps, data_holder
+from sales import sns, norm, plt, stats, np, pd, ps, data_holder, psycopg2
 
 
-def add_cc_warehouse_last_xdays_sales(df, days):
+def add_cc_warehouse_last_xdays_sales(conn, days):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in the last 'days' in the same warehouse.
@@ -18,24 +18,34 @@ def add_cc_warehouse_last_xdays_sales(df, days):
             format cc_warehouse_last_{days}days_sales
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0) AS cc_warehouse_last_{days}days_sales
-        FROM df a
-        LEFT JOIN df b
-            ON a.cc = b.cc
-            AND a.warehouse = b.warehouse
-            AND b.date >= DATE(a.date, '-{days} day')
-            AND b.date < a.date
-        GROUP BY a.date, a.cc, a.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_last_{days}days_sales INTEGER DEFAULT 0;
+    WITH last_cc_warehouse_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, warehouse
+            ORDER BY date
+            RANGE BETWEEN
+                INTERVAL '{days} DAY' PRECEDING
+                AND INTERVAL '1 DAY' PRECEDING
+        ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_warehouse_last_{days}days_sales =
+        lcws.calculated
+    FROM last_cc_warehouse_sales lcws
+    WHERE df_sale.cc = lcws.cc
+        AND df_sale.warehouse = lcws.warehouse
+        AND df_sale.date = lcws.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result[f'cc_warehouse_last_{days}days_sales'] = \
-        result[f'cc_warehouse_last_{days}days_sales'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_y_cc_warehouse_next_xdays_sales(df, days):
+def add_y_cc_warehouse_next_xdays_sales(conn, days):
     """
     Adds a new column to the input DataFrame with the quantity of CCs to sale
     in the next 'days' in the same warehouse.
@@ -52,25 +62,34 @@ def add_y_cc_warehouse_next_xdays_sales(df, days):
             format y_cc_warehouse_next_{days}days_sales
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(SUM(b.quantity), 0)
-            AS y_cc_warehouse_next_{days}days_sales
-        FROM df a
-        LEFT JOIN df b
-            ON a.cc = b.cc
-            AND a.warehouse = b.warehouse
-            AND b.date < DATE(a.date, '{days + 1} day')
-            AND b.date > a.date
-        GROUP BY a.date, a.cc, a.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN y_cc_warehouse_next_{days}days_sales INTEGER DEFAULT 0;
+    WITH next_cc_warehouse_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, warehouse
+            ORDER BY date
+            RANGE BETWEEN
+                 INTERVAL '1 DAY' FOLLOWING
+                 AND INTERVAL '{days} DAY' FOLLOWING
+        ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET y_cc_warehouse_next_{days}days_sales =
+        ncws.calculated
+    FROM next_cc_warehouse_sales ncws
+    WHERE df_sale.cc = ncws.cc
+        AND df_sale.warehouse = ncws.warehouse
+        AND df_sale.date = ncws.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result[f'y_cc_warehouse_next_{days}days_sales'] = \
-        result[f'y_cc_warehouse_next_{days}days_sales'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_last_xdays_mean_sales(df, days):
+def add_cc_warehouse_last_xdays_mean_sales(conn, days):
     """
     Adds a new column to the input DataFrame with the mean of the
     quantity of CCs sold in the last 'days' in the same warehouse.
@@ -87,25 +106,34 @@ def add_cc_warehouse_last_xdays_mean_sales(df, days):
             format cc_warehouse_last_{days}days_mean_sales
     """
     query = f'''
-        SELECT a.*,
-           COALESCE(ROUND(SUM(b.quantity)/{days}.0, 4), 0)
-            AS cc_warehouse_last_{days}days_mean_sales
-        FROM df a
-        LEFT JOIN df b
-            ON a.cc = b.cc
-            AND a.warehouse = b.warehouse
-            AND b.date >= DATE(a.date, '-{days} day')
-            AND b.date < a.date
-        GROUP BY a.date, a.cc, a.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_last_{days}days_mean_sales FLOAT DEFAULT 0.0;
+    WITH last_cc_warehouse_mean_sales AS (
+        SELECT *,
+            COALESCE(ROUND(SUM(quantity)
+            OVER (
+                PARTITION BY cc, warehouse
+                ORDER BY date
+                RANGE BETWEEN
+                    INTERVAL '{days} DAY' PRECEDING
+                    AND INTERVAL '1 DAY' PRECEDING
+            )/{days}.0, 4), 0) AS calculated
+        FROM df_sale
+        )
+    UPDATE df_sale
+    SET cc_warehouse_last_{days}days_mean_sales =
+        lcwms.calculated
+    FROM last_cc_warehouse_mean_sales lcwms
+    WHERE df_sale.cc = lcwms.cc
+        AND df_sale.warehouse = lcwms.warehouse
+        AND df_sale.date = lcwms.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result[f'cc_warehouse_last_{days}days_mean_sales'] = \
-        result[f'cc_warehouse_last_{days}days_mean_sales'].astype(float)
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_historic_sales(df):
+def add_cc_historic_sales(conn):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in historically in the company.
@@ -120,34 +148,35 @@ def add_cc_historic_sales(df):
             format cc_historic_sales
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY cc
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_historic_sales
-            FROM (
-                SELECT cc, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY cc, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.cc_historic_sales
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.cc = cumulative_sales.cc
+    ALTER TABLE df_sale
+        ADD COLUMN cc_historic_sales INTEGER DEFAULT 0;
+    WITH cc_date_sales AS (
+        SELECT cc, date, SUM(quantity) AS quantity
+            FROM df_sale
+            GROUP BY cc, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM cc_date_sales
+    )
+    UPDATE df_sale
+    SET cc_historic_sales = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_historic_sales'] = \
-        result['cc_historic_sales'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_historic_sales_same_day_of_the_week(df):
+def add_cc_historic_sales_same_day_of_the_week(conn):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in the same day of the week historically in the company.
@@ -162,23 +191,33 @@ def add_cc_historic_sales_same_day_of_the_week(df):
             name 'cc_historic_sales_same_day_of_the_week'
     """
     query = f'''
+    ALTER TABLE df_sale
+        ADD COLUMN cc_historic_sales_same_day_of_the_week INTEGER DEFAULT 0;
+    WITH cc_historic_sales_same_day AS (
         SELECT *,
             COALESCE(SUM(quantity)
             OVER (
-                PARTITION BY cc, strftime('%w', date)
+                PARTITION BY cc, EXTRACT(DOW FROM date)
                 ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_historic_sales_same_day_of_the_week
-        FROM df
+                RANGE BETWEEN UNBOUNDED PRECEDING
+                    AND INTERVAL '1 DAY' PRECEDING
+            ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_historic_sales_same_day_of_the_week =
+        chssd.calculated
+    FROM cc_historic_sales_same_day chssd
+    WHERE df_sale.cc = chssd.cc
+        AND df_sale.warehouse = chssd.warehouse
+        AND df_sale.date = chssd.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_historic_sales_same_day_of_the_week'] = \
-        result['cc_historic_sales_same_day_of_the_week'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_historic_sales_same_month(df):
+def add_cc_historic_sales_same_month(conn):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in the same month of the year historically in the company.
@@ -193,38 +232,39 @@ def add_cc_historic_sales_same_month(df):
             name 'cc_historic_sales_same_month'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY cc, month
-                ORDER BY year, month
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_historic_sales_same_month
-            FROM (
-                SELECT cc,
-                    strftime('%m', date) AS month,
-                    strftime('%Y', date) AS year,
-                    SUM(quantity) AS quantity
-                FROM df
-                GROUP BY month, year, cc
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.cc_historic_sales_same_month
-        FROM df, cumulative_sales
-        WHERE strftime('%m', df.date) = cumulative_sales.month
-            AND strftime('%Y', df.date) = cumulative_sales.year
-            AND df.cc = cumulative_sales.cc
+    ALTER TABLE df_sale
+        ADD COLUMN cc_historic_sales_same_month INTEGER DEFAULT 0;
+    WITH cc_month_year_sales AS (
+        SELECT cc,
+            EXTRACT(MONTH FROM date) AS month,
+            EXTRACT(YEAR FROM date) AS year,
+            SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY month, year, cc
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, month
+            ORDER BY year, month
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM cc_month_year_sales
+    )
+    UPDATE df_sale
+    SET cc_historic_sales_same_month = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND EXTRACT(MONTH FROM date) = cs.month
+        AND EXTRACT(YEAR FROM date) = cs.year
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_historic_sales_same_month'] = \
-        result['cc_historic_sales_same_month'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_historic_sales(df):
+def add_cc_warehouse_historic_sales(conn):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in historically in the same warehouse.
@@ -239,23 +279,31 @@ def add_cc_warehouse_historic_sales(df):
             format cc_warehouse_historic_sales
     """
     query = f'''
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_historic_sales INTEGER DEFAULT 0;
+    WITH cc_warehouse_historic_sales AS (
         SELECT *,
             COALESCE(SUM(quantity)
             OVER (
                 PARTITION BY cc, warehouse
                 ORDER BY date
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_warehouse_historic_sales
-        FROM df
+            ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_warehouse_historic_sales = cwhs.calculated
+    FROM cc_warehouse_historic_sales cwhs
+    WHERE df_sale.cc = cwhs.cc
+        AND df_sale.warehouse = cwhs.warehouse
+        AND df_sale.date = cwhs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_warehouse_historic_sales'] = \
-        result['cc_warehouse_historic_sales'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_historic_sales_same_day_of_the_week(df):
+def add_cc_warehouse_historic_sales_same_day_of_the_week(conn):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in the same day of the week in the previous same warehouse.
@@ -270,24 +318,32 @@ def add_cc_warehouse_historic_sales_same_day_of_the_week(df):
             name 'cc_warehouse_historic_sales_same_day_of_the_week'
     """
     query = f'''
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_historic_sales_same_day_of_the_week
+        INTEGER DEFAULT 0;
+    WITH cc_warehouse_historic_sales_same_day AS (
         SELECT *,
             COALESCE(SUM(quantity)
             OVER (
-                PARTITION BY cc, warehouse, strftime('%w', date)
+                PARTITION BY cc, warehouse, EXTRACT(DOW FROM date)
                 ORDER BY date
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_warehouse_historic_sales_same_day_of_the_week
-        FROM df
+            ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_warehouse_historic_sales_same_day_of_the_week = cwhssd.calculated
+    FROM cc_warehouse_historic_sales_same_day cwhssd
+    WHERE df_sale.cc = cwhssd.cc
+        AND df_sale.warehouse = cwhssd.warehouse
+        AND df_sale.date = cwhssd.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_warehouse_historic_sales_same_day_of_the_week'] = \
-        result['cc_warehouse_historic_sales_same_day_of_the_week'
-               ].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_historic_sales_same_month(df):
+def add_cc_warehouse_historic_sales_same_month(conn):
     """
     Adds a new column to the input DataFrame with the quantity of CCs sold
     in the same month of the previous year in the same warehouse.
@@ -302,39 +358,40 @@ def add_cc_warehouse_historic_sales_same_month(df):
             name 'cc_warehouse_historic_sales_same_month'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY cc, warehouse, month
-                ORDER BY year, month
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_warehouse_historic_sales_same_month
-            FROM (
-                SELECT cc, warehouse,
-                    strftime('%m', date) AS month,
-                    strftime('%Y', date) AS year,
-                    SUM(quantity) AS quantity
-                FROM df
-                GROUP BY month, year, cc, warehouse
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.cc_warehouse_historic_sales_same_month
-        FROM df, cumulative_sales
-        WHERE strftime('%m', df.date) = cumulative_sales.month
-            AND strftime('%Y', df.date) = cumulative_sales.year
-            AND df.cc = cumulative_sales.cc
-            AND df.warehouse = cumulative_sales.warehouse
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_historic_sales_same_month INTEGER DEFAULT 0;
+    WITH cc_warehouse_historic_sales_same_month AS (
+        SELECT cc, warehouse,
+            EXTRACT(MONTH FROM date) AS month,
+            EXTRACT(YEAR FROM date) AS year,
+            SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY month, year, cc, warehouse
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, warehouse, month
+            ORDER BY year, month
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM cc_warehouse_historic_sales_same_month
+    )
+    UPDATE df_sale
+    SET cc_warehouse_historic_sales_same_month = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.warehouse = cs.warehouse
+        AND EXTRACT(MONTH FROM date) = cs.month
+        AND EXTRACT(YEAR FROM date) = cs.year
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_warehouse_historic_sales_same_month'] = \
-        result['cc_warehouse_historic_sales_same_month'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_cumulative_sales_in_the_week(df):
+def add_cc_cumulative_sales_in_the_week(conn):
     """
     Adds a new column to the input DataFrame with the cumulative week
     sales for the cc across the company.
@@ -349,34 +406,35 @@ def add_cc_cumulative_sales_in_the_week(df):
             name 'cc_cumulative_sales_in_the_week'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY cc, strftime('%W-%Y', date)
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_cumulative_sales_in_the_week
-            FROM (
-                SELECT cc, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY cc, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.cc_cumulative_sales_in_the_week
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.cc = cumulative_sales.cc
+    ALTER TABLE df_sale
+        ADD COLUMN cc_cumulative_sales_in_the_week INTEGER DEFAULT 0;
+    WITH cc_date_sales AS (
+        SELECT cc, date, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY cc, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, to_char(date, 'IW-IYYY')
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM cc_date_sales
+    )
+    UPDATE df_sale
+    SET cc_cumulative_sales_in_the_week = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_cumulative_sales_in_the_week'] = \
-        result['cc_cumulative_sales_in_the_week'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_cumulative_sales_in_the_month(df):
+def add_cc_cumulative_sales_in_the_month(conn):
     """
     Adds a new column to the input DataFrame with the cumulative month
     sales for the cc across the company.
@@ -391,34 +449,35 @@ def add_cc_cumulative_sales_in_the_month(df):
             name 'cc_cumulative_sales_in_the_month'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY cc, strftime('%m-%Y', date)
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_cumulative_sales_in_the_month
-            FROM (
-                SELECT cc, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY cc, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.cc_cumulative_sales_in_the_month
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.cc = cumulative_sales.cc
+    ALTER TABLE df_sale
+        ADD COLUMN cc_cumulative_sales_in_the_month INTEGER DEFAULT 0;
+    WITH cc_date_sales AS (
+        SELECT cc, date, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY cc, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, to_char(date, 'MM-YYYY')
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM cc_date_sales
+    )
+    UPDATE df_sale
+    SET cc_cumulative_sales_in_the_month = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_cumulative_sales_in_the_month'] = \
-        result['cc_cumulative_sales_in_the_month'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_cumulative_sales_in_the_year(df):
+def add_cc_cumulative_sales_in_the_year(conn):
     """
     Adds a new column to the input DataFrame with the cumulative year
     sales for the cc across the company.
@@ -433,34 +492,35 @@ def add_cc_cumulative_sales_in_the_year(df):
             name 'cc_cumulative_sales_in_the_year'
     """
     query = f'''
-        WITH cumulative_sales AS (
-            SELECT *,
-            COALESCE(SUM(quantity)
-            OVER (
-                PARTITION BY cc, strftime('%Y', date)
-                ORDER BY date
-                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_cumulative_sales_in_the_year
-            FROM (
-                SELECT cc, date, SUM(quantity) AS quantity
-                FROM df
-                GROUP BY cc, date
-            )
-        )
-        SELECT df.*,
-            cumulative_sales.cc_cumulative_sales_in_the_year
-        FROM df, cumulative_sales
-        WHERE df.date = cumulative_sales.date
-            AND df.cc = cumulative_sales.cc
+    ALTER TABLE df_sale
+        ADD COLUMN cc_cumulative_sales_in_the_year INTEGER DEFAULT 0;
+    WITH cc_year_sales AS (
+        SELECT cc, date, SUM(quantity) AS quantity
+        FROM df_sale
+        GROUP BY cc, date
+    ),
+    cumulative_sales AS (
+        SELECT *,
+        COALESCE(SUM(quantity)
+        OVER (
+            PARTITION BY cc, EXTRACT(YEAR FROM date)
+            ORDER BY date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS calculated
+        FROM cc_year_sales
+    )
+    UPDATE df_sale
+    SET cc_cumulative_sales_in_the_year = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_cumulative_sales_in_the_year'] = \
-        result['cc_cumulative_sales_in_the_year'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_cumulative_sales_in_the_week(df):
+def add_cc_warehouse_cumulative_sales_in_the_week(conn):
     """
     Adds a new column to the input DataFrame with the cumulative week
     sales for the cc in the warehouse.
@@ -475,23 +535,32 @@ def add_cc_warehouse_cumulative_sales_in_the_week(df):
             name 'cc_warehouse_cumulative_sales_in_the_week'
     """
     query = f'''
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_cumulative_sales_in_the_week
+        INTEGER DEFAULT 0;
+    WITH cumulative_sales AS (
         SELECT *,
             COALESCE(SUM(quantity)
             OVER (
-                PARTITION BY cc, warehouse, strftime('%W-%Y', date)
+                PARTITION BY cc, warehouse, to_char(date, 'IW-IYYY')
                 ORDER BY date
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_warehouse_cumulative_sales_in_the_week
-        FROM df
+            ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_warehouse_cumulative_sales_in_the_week = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.warehouse = cs.warehouse
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_warehouse_cumulative_sales_in_the_week'] = \
-        result['cc_warehouse_cumulative_sales_in_the_week'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_cumulative_sales_in_the_month(df):
+def add_cc_warehouse_cumulative_sales_in_the_month(conn):
     """
     Adds a new column to the input DataFrame with the cumulative month
     sales for the cc in the warehouse.
@@ -506,24 +575,32 @@ def add_cc_warehouse_cumulative_sales_in_the_month(df):
             name 'cc_warehouse_cumulative_sales_in_the_month'
     """
     query = f'''
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_cumulative_sales_in_the_month
+        INTEGER DEFAULT 0;
+    WITH cumulative_sales AS (
         SELECT *,
             COALESCE(SUM(quantity)
             OVER (
-                PARTITION BY cc, warehouse, strftime('%m-%Y', date)
+                PARTITION BY cc, warehouse, to_char(date, 'MM-YYYY')
                 ORDER BY date
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_warehouse_cumulative_sales_in_the_month
-        FROM df
+            ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_warehouse_cumulative_sales_in_the_month = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.warehouse = cs.warehouse
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_warehouse_cumulative_sales_in_the_month'] = \
-        result['cc_warehouse_cumulative_sales_in_the_month'
-               ].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
 
 
-def add_cc_warehouse_cumulative_sales_in_the_year(df):
+def add_cc_warehouse_cumulative_sales_in_the_year(conn):
     """
     Adds a new column to the input DataFrame with the cumulative year
     sales for the cc in the warehouse.
@@ -538,17 +615,26 @@ def add_cc_warehouse_cumulative_sales_in_the_year(df):
             name 'cc_warehouse_cumulative_sales_in_the_year'
     """
     query = f'''
+    ALTER TABLE df_sale
+        ADD COLUMN cc_warehouse_cumulative_sales_in_the_year
+        INTEGER DEFAULT 0;
+    WITH cumulative_sales AS (
         SELECT *,
             COALESCE(SUM(quantity)
             OVER (
-                PARTITION BY cc, warehouse, strftime('%Y', date)
+                PARTITION BY cc, warehouse, EXTRACT(YEAR FROM date)
                 ORDER BY date
                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ), 0) AS cc_warehouse_cumulative_sales_in_the_year
-        FROM df
+            ), 0) AS calculated
+        FROM df_sale
+    )
+    UPDATE df_sale
+    SET cc_warehouse_cumulative_sales_in_the_year = cs.calculated
+    FROM cumulative_sales cs
+    WHERE df_sale.cc = cs.cc
+        AND df_sale.warehouse = cs.warehouse
+        AND df_sale.date = cs.date
     '''
-    result = ps.sqldf(query)
-    result['date'] = pd.to_datetime(result['date'])
-    result['cc_warehouse_cumulative_sales_in_the_year'] = \
-        result['cc_warehouse_cumulative_sales_in_the_year'].astype('int64')
-    return result
+    with conn.cursor() as cursor:
+        cursor.execute(query)
+    conn.commit()
