@@ -240,7 +240,8 @@ def add_sku_historic_sales_same_month(conn):
             EXTRACT(YEAR FROM date) AS year,
             SUM(quantity) AS quantity
         FROM df_sale
-        GROUP BY month, year, sku
+        GROUP BY sku,
+            EXTRACT(MONTH FROM date), EXTRACT(YEAR FROM date)
     ),
     cumulative_sales AS (
         SELECT *,
@@ -366,7 +367,8 @@ def add_sku_warehouse_historic_sales_same_month(conn):
             EXTRACT(YEAR FROM date) AS year,
             SUM(quantity) AS quantity
         FROM df_sale
-        GROUP BY month, year, sku, warehouse
+        GROUP BY sku, warehouse,
+            EXTRACT(MONTH FROM date), EXTRACT(YEAR FROM date)
     ),
     cumulative_sales AS (
         SELECT *,
