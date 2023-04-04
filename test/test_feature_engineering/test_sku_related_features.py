@@ -95,6 +95,70 @@ def test_add_sku_warehouse_last_xdays_sales(test_db):
             (df['warehouse'] == 'MALLSPORT') &
             (df['date'] == '2023-02-08')
         ][f'sku_warehouse_last_{days}days_sales'].values[0] == 6
+        
+
+def test_add_sku_warehouse_last_1days_sales(test_db):
+    data = {'sku': ["1", "1", "1", "2", "2", "4", "4", "2", "2"],
+            'quantity': [5, 6, 7, 8, 4, 3, 5, 6, 3],
+            'date': [
+                '08-02-2023', '06-02-2023',
+                '07-02-2023', '08-02-2023',
+                '19-02-2023', '08-02-2023',
+                '07-02-2023', '02-02-2023',
+                '09-02-2023'
+            ],
+            'warehouse': [
+                'LASCONDES', 'LASCONDES',
+                'LASCONDES', 'MALLSPORT',
+                'MALLSPORT', 'LADEHESA',
+                'COSTANERA', 'MALLSPORT',
+                'MALLSPORT'
+            ]}
+    """Create temporal database"""
+    create_datatable(test_db, data)
+
+    """Apply function"""
+    days = 1
+    add_sku_warehouse_last_xdays_sales(test_db, days)
+
+    """Check the results"""
+    with test_db.cursor() as cursor:
+        cursor.execute('SELECT * FROM df_sale;')
+        df = pd.DataFrame(
+            cursor.fetchall(),
+            columns=[desc[0] for desc in cursor.description]
+        )
+        df['date'] = pd.to_datetime(df['date'])
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-08')
+        ][f'sku_warehouse_last_{days}days_sales'].values[0] == 7
+    assert \
+        df[
+            (df['sku'] == '1') &
+            (df['warehouse'] == 'LASCONDES') &
+            (df['date'] == '2023-02-07')
+        ][f'sku_warehouse_last_{days}days_sales'].values[0] == 6
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-09')
+        ][f'sku_warehouse_last_{days}days_sales'].values[0] == 8
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-19')
+        ][f'sku_warehouse_last_{days}days_sales'].values[0] == 0
+    assert \
+        df[
+            (df['sku'] == '2') &
+            (df['warehouse'] == 'MALLSPORT') &
+            (df['date'] == '2023-02-08')
+        ][f'sku_warehouse_last_{days}days_sales'].values[0] == 0
 
 
 def test_add_y_sku_warehouse_next_xdays_sales(test_db):
